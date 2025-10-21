@@ -5,6 +5,15 @@ docker pull ghcr.io/o2lab/crs-local:latest
 docker tag ghcr.io/o2lab/crs-local:latest crs-local
 docker run -it --rm --privileged crs-local
 ```
+
+Fix for previous command:
+```console
+docker run -it --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --env-file .env
+  crs-local
+```
+
 ```
 export ANTHROPIC_API_KEY=...
 ```
