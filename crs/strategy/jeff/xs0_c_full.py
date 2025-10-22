@@ -81,21 +81,20 @@ GEMINI_MODEL_FLASH_LITE = "gemini-2.5-flash-lite-preview-06-17"
 GROK_MODEL = "xai/grok-3-beta"
 CLAUDE_MODEL_SONNET_4 = "claude-sonnet-4-20250514"
 CLAUDE_MODEL_OPUS_4 = "claude-opus-4-20250514"
-MODELS = [CLAUDE_MODEL, OPENAI_MODEL_O3, GEMINI_MODEL_PRO_25]
+MODELS = [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL_OPUS_4]
 CLAUDE_MODEL = CLAUDE_MODEL_SONNET_4
 OPENAI_MODEL = CLAUDE_MODEL_SONNET_4
-MODELS = [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL_OPUS_4]
 
 def get_fallback_model(current_model, tried_models):
     """Get a fallback model that hasn't been tried yet"""
-    # Define model fallback chains
+    # Define model fallback chains - prioritizing Claude models
     fallback_chains = {
-        GEMINI_MODEL_PRO_25: [CLAUDE_MODEL, CLAUDE_MODEL_35, OPENAI_MODEL_41, OPENAI_MODEL_O3],   
-        OPENAI_MODEL_41: [OPENAI_MODEL_O4_MINI, OPENAI_MODEL_O3, GEMINI_MODEL_PRO_25],   
-        OPENAI_MODEL: [GEMINI_MODEL_PRO_25, GEMINI_MODEL_FLASH, GEMINI_MODEL_FLASH_LITE],             
-        CLAUDE_MODEL: [CLAUDE_MODEL_SONNET_4,OPENAI_MODEL, CLAUDE_MODEL_35, OPENAI_MODEL_O3, GEMINI_MODEL_PRO_25],        
-        # Default fallbacks
-        "default": [CLAUDE_MODEL, OPENAI_MODEL, OPENAI_MODEL_41,OPENAI_MODEL_O3,GEMINI_MODEL_PRO_25]
+        CLAUDE_MODEL_SONNET_4: [CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL, CLAUDE_MODEL_35],   
+        CLAUDE_MODEL_OPUS_4: [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL, CLAUDE_MODEL_35],   
+        CLAUDE_MODEL: [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL_35],             
+        CLAUDE_MODEL_35: [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL],        
+        # Default fallbacks - all Claude models
+        "default": [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL, CLAUDE_MODEL_35]
     }
     # Get the fallback chain for the current model
     fallback_options = fallback_chains.get(current_model, fallback_chains["default"])
@@ -305,15 +304,10 @@ def call_litellm(log_file, messages, model_name) -> (str, bool):
                 log_message(log_file, f"{log_prefix}: Switching from {current_model} to fallback model {fallback_model} due to error.")
                 current_model = fallback_model
                 tried_models_in_this_call.add(current_model)
-                if current_model.startswith("gemini"):
-                    try:
-                        response = call_gemini_api(log_file, messages, current_model)
-                        return response
-                        
-                    except Exception as e:  
-                        error_str = str(e)
-                        log_message(log_file, f"Gemini Attempt {attempt+1}/{max_retries} failed with model {current_model}: {error_str}")
-                        continue
+                # Skip Gemini models since we only have Claude API key
+                if current_model and current_model.startswith("gemini"):
+                    log_message(log_file, f"Skipping Gemini model {current_model} - not configured")
+                    continue
                 # Use a shorter, fixed delay when switching models before the next attempt
                 time.sleep(random.uniform(1, 3)) # Short random delay
                 continue # Skip normal backoff, immediately try the fallback model on the next attempt loop iteration
@@ -539,7 +533,7 @@ def extract_python_code_from_response(log_file, text, max_retries=2, timeout=30)
                 print(f"Waiting {wait_time} seconds before retry")
                 time.sleep(wait_time)
     
-    use_another_model = GEMINI_MODEL
+    use_another_model = CLAUDE_MODEL_35
     try:
         print(f"Falling back to {use_another_model}")
 
@@ -985,7 +979,28 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
     fuzzer_name = os.path.basename(fuzzer_path)
     project_dir = fuzzer_path.split("/fuzz-tooling/build/out")[0] + "/"
     
-    log_message(log_file, f"Looking for source of {fuzzer_name} in {project_src_dir}")
+    # Try multiple possible source directories
+    possible_src_dirs = [
+        project_src_dir,  # Original path (e.g., afc-sqlite3-address)
+        project_src_dir.rsplit('-', 1)[0],  # Remove sanitizer suffix (e.g., afc-sqlite3)
+        os.path.join(project_dir, project_name),  # Direct project name (e.g., sqlite3)
+        os.path.join(project_dir, f"afc-{project_name}"),  # With afc- prefix
+    ]
+    
+    # Find the first directory that actually exists
+    actual_src_dir = None
+    for src_dir in possible_src_dirs:
+        if os.path.exists(src_dir):
+            actual_src_dir = src_dir
+            break
+    
+    if not actual_src_dir:
+        actual_src_dir = project_src_dir  # Fallback to original
+    
+    log_message(log_file, f"Looking for source of {fuzzer_name} in {actual_src_dir} (original: {project_src_dir})")
+    
+    # Update project_src_dir to the actual directory that exists
+    project_src_dir = actual_src_dir
     
     # Extract the base name without _fuzzer suffix if present
     base_name = fuzzer_name
@@ -1234,7 +1249,7 @@ Please respond with just the full path to the file you believe is the fuzzer sou
     
     # Call the model to identify the fuzzer source
     messages = [{"role": "user", "content": prompt}]
-    response, success = call_llm(log_file, messages, GEMINI_MODEL)
+    response, success = call_llm(log_file, messages, CLAUDE_MODEL)
     
     if not success:
         log_message(log_file, "Failed to get model response for fuzzer source identification")
