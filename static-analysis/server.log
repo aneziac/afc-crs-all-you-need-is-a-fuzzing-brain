@@ -1,0 +1,22 @@
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /v1/health                --> main.handleHealth (3 handlers)
+[GIN-debug] POST   /v1/analysis              --> main.main.func1 (3 handlers)
+[GIN-debug] POST   /v1/analysis_qx           --> main.main.func2 (3 handlers)
+[GIN-debug] POST   /v1/reachable             --> main.main.func3 (3 handlers)
+[GIN-debug] POST   /v1/reachable_qx          --> main.main.func4 (3 handlers)
+[GIN-debug] POST   /v1/funmeta               --> main.main.func5 (3 handlers)
+[GIN-debug] POST   /v1/task                  --> main.main.func6 (3 handlers)
+[GIN-debug] GET    /v1/task/:taskID          --> main.main.func7 (3 handlers)
+[GIN-debug] DELETE /v1/task/:taskID          --> main.main.func8 (3 handlers)
+2025/10/21 19:19:19 Starting analysis service on port 7082...
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on :7082
+[GIN-debug] [ERROR] listen tcp :7082: bind: address already in use
+2025/10/21 19:19:19 Failed to start server: listen tcp :7082: bind: address already in use
+exit status 1
