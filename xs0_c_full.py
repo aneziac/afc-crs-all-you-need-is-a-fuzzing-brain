@@ -27,6 +27,9 @@ from typing import Optional, Dict, List, Any, Union, Tuple
 import concurrent.futures
 import uuid
 
+# Load environment variables from .env file
+load_dotenv()
+
 import openlit
 from opentelemetry import trace
 
@@ -43,10 +46,15 @@ FULL_SCAN = False
 USE_CONTROL_FLOW = True
 GLOBAL_FUNCTION_METADATA = {}
 
+# Hardcoded paths for local SQLite scanning
+HARDCODED_LOCAL_SQLITE_BASE = "/home/nate/code/minimal/local-test-sqlite3-full-01"
+HARDCODED_LOCAL_SQLITE_SRC = "/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3"
+HARDCODED_LOCAL_FUZZ_TOOLING = "/home/nate/code/minimal/local-test-sqlite3-full-01/fuzz-tooling"
+
 POV_METADATA_DIR = "successful_povs"
-POV_SUCCESS_DIR = f"/tmp/{POV_METADATA_DIR}"
+POV_SUCCESS_DIR = f"./tmp/{POV_METADATA_DIR}"
 PATCH_METADATA_DIR = "successful_patches"
-PATCH_SUCCESS_DIR = f"/tmp/{PATCH_METADATA_DIR}"
+PATCH_SUCCESS_DIR = f"./tmp/{PATCH_METADATA_DIR}"
 
 PATCH_WORKSPACE_DIR = "patch_workspace"
 SUCCESS_PATCH_METADATA_FILE="successful_patch_metadata.json"
@@ -111,7 +119,7 @@ Limit your response to 100 tokens.
 """
 
 # Logging setup
-LOG_DIR = os.environ.get("LOG_DIR", "/tmp/strategy_logs")
+LOG_DIR = os.environ.get("LOG_DIR", "./tmp/strategy_logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 def setup_logging(fuzzer_name):
@@ -807,6 +815,28 @@ def process_large_diff(diff_content, log_file):
 # commit_cpv17.txt
 def get_commit_info(log_file, project_dir, language):
     """Get information about the commit that introduced the vulnerability"""
+
+    # Check if this is a local SQLite scan
+    if is_local_sqlite_scan(project_dir):
+        log_message(log_file, "Using local SQLite diff information")
+
+        # Look for the full-changes.diff file in .aixcc directory
+        local_diff_path = os.path.join(HARDCODED_LOCAL_SQLITE_SRC, ".aixcc", "full-changes.diff")
+        if os.path.exists(local_diff_path):
+            try:
+                with open(local_diff_path, "r") as f:
+                    diff_content = f.read()
+                log_message(log_file, f"Read local SQLite diff from {local_diff_path}, len: {len(diff_content)}")
+
+                if len(diff_content) > 50000:
+                    log_message(log_file, "Local diff is large, processing to extract relevant parts...")
+                    processed_diff = process_large_diff(diff_content, log_file)
+                    return "Local SQLite full-changes.diff (processed)", processed_diff
+
+                return "Local SQLite full-changes.diff", diff_content
+            except Exception as e:
+                log_message(log_file, f"Error reading local diff file: {str(e)}")
+
     if TEST_NGINX == True:
         commit_file = os.path.join(project_dir, f"commit_{CPV}.txt")
         with open(commit_file, "r") as f:
@@ -891,6 +921,12 @@ def is_likely_source_for_fuzzer(file_base, fuzzer_name, base_name):
 
     return False
 
+def is_local_sqlite_scan(project_dir):
+    """Check if this is a local SQLite scan"""
+    if not project_dir:
+        return False
+    return "local-test-sqlite3" in project_dir or "minimal" in project_dir
+
 def strip_license_text(source_code):
     """Strip copyright and license text from source code"""
     # Common patterns that indicate license blocks
@@ -972,6 +1008,46 @@ def strip_license_text(source_code):
 
 def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, language='c'):
     """Find the source code of the fuzzer by using the model to analyze build scripts and source files"""
+
+    # Check if this is a local SQLite scan and override paths
+    if is_local_sqlite_scan(fuzzer_path) or is_local_sqlite_scan(project_src_dir):
+        log_message(log_file, "Detected local SQLite scan - using hardcoded paths")
+        project_src_dir = HARDCODED_LOCAL_SQLITE_SRC
+        project_name = "sqlite3"
+
+        # Look for fuzzer source files directly in the test directory
+        test_dir = os.path.join(HARDCODED_LOCAL_SQLITE_SRC, "test")
+
+        fuzzer_name = os.path.basename(fuzzer_path)
+        base_name = fuzzer_name.replace("_fuzzer", "").replace("-fuzzer", "")
+
+        # Check for direct fuzzer source files
+        for fuzzer_file in ["ossfuzz.c", "customfuzz3.c"]:
+            if base_name in fuzzer_file or fuzzer_name in fuzzer_file:
+                fuzzer_source_path = os.path.join(test_dir, fuzzer_file)
+                if os.path.exists(fuzzer_source_path):
+                    try:
+                        with open(fuzzer_source_path, 'r') as f:
+                            content = f.read()
+                            log_message(log_file, f"Found local SQLite fuzzer source: {fuzzer_source_path}")
+                            return strip_license_text(content), fuzzer_source_path, project_src_dir
+                    except Exception as e:
+                        log_message(log_file, f"Error reading {fuzzer_source_path}: {str(e)}")
+
+        # If no direct match, return the first available fuzzer
+        for fuzzer_file in ["ossfuzz.c", "customfuzz3.c"]:
+            fuzzer_source_path = os.path.join(test_dir, fuzzer_file)
+            if os.path.exists(fuzzer_source_path):
+                try:
+                    with open(fuzzer_source_path, 'r') as f:
+                        content = f.read()
+                        log_message(log_file, f"Using fallback local SQLite fuzzer source: {fuzzer_source_path}")
+                        return strip_license_text(content), fuzzer_source_path
+                except Exception as e:
+                    log_message(log_file, f"Error reading {fuzzer_source_path}: {str(e)}")
+
+        log_message(log_file, "Could not find any local SQLite fuzzer source files")
+        return "// Could not find local SQLite fuzzer source", ""
 
     fuzzer_name = os.path.basename(fuzzer_path)
     project_dir = fuzzer_path.split("/fuzz-tooling/build/out")[0] + "/"
@@ -4629,9 +4705,6 @@ def main():
 
     parser = argparse.ArgumentParser(description="Strategy 0: LLM-guided POV Generation")
     # parser.add_argument("fuzzer_path", help="Path to the fuzzer")
-    parser.add_argument("project_name", help="Project name")
-    parser.add_argument("focus", help="Focus")
-    parser.add_argument("language", help="Language")
 
     # Optional arguments to override default constants
     parser.add_argument("--test-nginx", dest="test_nginx", type=lambda x: x.lower() == 'true',
@@ -4692,9 +4765,9 @@ def main():
     print(f"DEBUG: Global PATCHING_TIMEOUT_MINUTES = {PATCHING_TIMEOUT_MINUTES}")
     print(f"DEBUG: Global POV_METADATA_DIR = {POV_METADATA_DIR}")
 
-    fuzzer_path = "/home/nate/code/minimal/fuzzers/ossfuzz" # args.fuzzer_path
+    fuzzer_path = "/home/nate/code/minimal/fuzzers/sqlite3_fuzzer" # args.fuzzer_path
     project_name = "sqlite3"
-    focus = args.focus
+    focus = "test"
     language = "c"
     # if not language.startswith('c'):
     #     language = "java"
@@ -4726,7 +4799,8 @@ def main():
     else:
         project_dir = os.path.dirname(os.path.dirname(fuzzer_path))
 
-    project_src_dir = os.path.join(project_dir, focus+"-"+sanitizer)
+    # project_src_dir = os.path.join(project_dir, focus+"-"+sanitizer)
+    project_src_dir = "/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3"
     print(f"DEBUG: project_dir = {project_dir}")
     print(f"DEBUG: project_src_dir = {project_src_dir}")
 
@@ -4779,27 +4853,25 @@ def main():
             else:
                 all_reachable_funcs = extract_reachable_functions_from_analysis_service_for_c(fuzzer_path,fuzzer_src_path,focus,project_src_dir)
 
+            log_message(log_file, f"Extracted reachable functions: {all_reachable_funcs}")
             # print(f"reachable_funcs: {reachable_funcs}")
             # print(f"Received {len(all_reachable_funcs)} reachable_functions: {all_reachable_funcs}\n")
 
             reachable_funcs = all_reachable_funcs
             vulnerable_functions = None
-            models_to_try = [CLAUDE_MODEL, OPENAI_MODEL_O3, GEMINI_MODEL_PRO_25]
-            if language.startswith('j'):
-                # for Java, try o3 first
-                # models_to_try = [OPENAI_MODEL_O3, GROK_MODEL, CLAUDE_MODEL]
-                models_to_try = [OPENAI_MODEL_O3, CLAUDE_MODEL]
+            models_to_try = [CLAUDE_MODEL]
 
             random.shuffle(models_to_try)
             MAX_ITERATIONS = 3 #set at most three iterations to optimize time
             for model_name in models_to_try:
-                if len(all_reachable_funcs) > 10:
+                if len(all_reachable_funcs) > 0:  # force execution
                     # likely happen, try claude-3.7 first
-                    top_k = len(all_reachable_funcs) // 10
+                    top_k = len(all_reachable_funcs)
                     if top_k > 10:
                         top_k = 10
 
                     vulnerable_functions = find_most_likely_vulnerable_functions(log_file,all_reachable_funcs,language,model_name,top_k)
+                    # quit()
                     # extract only the top 10 from vulnerable_functions
                     reachable_funcs = extract_vulnerable_functions(reachable_funcs,vulnerable_functions,top_k)
 
