@@ -1,0 +1,11 @@
+{
+  "task_id": "acb8a01e-740d-45d0-92b5-e7ade784ed97",
+  "type": "full",
+  "deadline": 1761037301,
+  "focus": "afc-sqlite3",
+  "harnesses_included": true,
+  "project_name": "sqlite3",
+  "source": null,
+  "metadata": {},
+  "state": ""
+}

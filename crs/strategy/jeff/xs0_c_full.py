@@ -89,21 +89,21 @@ def get_fallback_model(current_model, tried_models):
     """Get a fallback model that hasn't been tried yet"""
     # Define model fallback chains - prioritizing Claude models
     fallback_chains = {
-        CLAUDE_MODEL_SONNET_4: [CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL, CLAUDE_MODEL_35],   
-        CLAUDE_MODEL_OPUS_4: [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL, CLAUDE_MODEL_35],   
-        CLAUDE_MODEL: [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL_35],             
-        CLAUDE_MODEL_35: [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL],        
+        CLAUDE_MODEL_SONNET_4: [CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL, CLAUDE_MODEL_35],
+        CLAUDE_MODEL_OPUS_4: [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL, CLAUDE_MODEL_35],
+        CLAUDE_MODEL: [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL_35],
+        CLAUDE_MODEL_35: [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL],
         # Default fallbacks - all Claude models
         "default": [CLAUDE_MODEL_SONNET_4, CLAUDE_MODEL_OPUS_4, CLAUDE_MODEL, CLAUDE_MODEL_35]
     }
     # Get the fallback chain for the current model
     fallback_options = fallback_chains.get(current_model, fallback_chains["default"])
-    
+
     # Find the first model in the fallback chain that hasn't been tried yet
     for model in fallback_options:
         if model not in tried_models:
             return model
-    
+
     # If all models in the chain have been tried, return None
     return None
 
@@ -122,10 +122,10 @@ def setup_logging(fuzzer_name):
     # Include DO_PATCH_ONLY and FULL_SCAN in the log filename
     patch_status = "patch_only" if DO_PATCH_ONLY else "basic_pov_full_strategy"
     scan_type = "full_scan" if FULL_SCAN else "delta_scan"
-    
+
     timestamp = int(time.time())
     log_file = os.path.join(LOG_DIR, f"xs0_{fuzzer_name}_{patch_status}_{scan_type}_{timestamp}.log")
-    
+
     # Log initial configuration
     with open(log_file, "w") as f:
         f.write(f"Strategy: XS0\n")
@@ -139,18 +139,18 @@ def setup_logging(fuzzer_name):
         f.write(f"POV_SUCCESS_DIR: {POV_SUCCESS_DIR}\n")
         f.write(f"MODELS: {', '.join(MODELS)}\n")
         f.write("-" * 80 + "\n")
-    
+
     return log_file
 
 def log_message(log_file, message):
     """Log a message to the log file, print to stdout, and send to telemetry if available"""
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] {message}\n"
-    
+
     # Log to file
     with open(log_file, "a") as f:
         f.write(log_entry)
-    
+
     # Print to stdout
     print(message)
 
@@ -166,11 +166,11 @@ def log_time(log_file, start_time, end_time, function_name, description):
 def truncate_output(output, max_lines=200):
     """
     Truncate output to show only the first and last parts if it's too long.
-    
+
     Args:
         output: The output string to truncate
         max_lines: Maximum number of lines to show
-        
+
     Returns:
         str: Truncated output
     """
@@ -183,14 +183,14 @@ def truncate_output(output, max_lines=200):
     # Show first 100 and last 100 lines
     first_part = lines[:max_lines//2]
     last_part = lines[-(max_lines//2):]
-    
+
     return '\n'.join(first_part) + '\n\n[...truncated...]\n\n' + '\n'.join(last_part)
 
 def call_gemini_api(log_file, messages, model_name="gemini-1.0-pro") -> (str, bool):
     """Call Gemini API with message history using the chat interface."""
 
     import google.generativeai as genai
-    
+
     log_message(log_file, f"Calling {model_name} using chat interface...")
 
     try:
@@ -223,7 +223,7 @@ def call_gemini_api(log_file, messages, model_name="gemini-1.0-pro") -> (str, bo
             start_time = time.time()
             response = chat.send_message(last_message)
             end_time = time.time()
-            
+
             log_time(log_file, start_time, end_time, "call_gemini_api", f"LLM call to {model_name}")
 
             if response:
@@ -238,24 +238,24 @@ def call_gemini_api(log_file, messages, model_name="gemini-1.0-pro") -> (str, bo
 
 
 def call_litellm(log_file, messages, model_name) -> (str, bool):
-    """Call LiteLLM API with the given messages and model with comprehensive retry logic"""    
+    """Call LiteLLM API with the given messages and model with comprehensive retry logic"""
     log_message(log_file, f"Calling {model_name}...")
     start_time = time.time()
-    
+
     # Retry parameters
     max_retries = 5
     base_delay = 2  # Start with 2 seconds
-    
+
     # Track models we've tried to implement fallback logic
     current_model = model_name
-    log_prefix = "APIError"      
+    log_prefix = "APIError"
     tried_models_in_this_call = {current_model}
 
     for attempt in range(max_retries):
         try:
             if attempt > 0:
                 log_message(log_file, f"Retry attempt {attempt+1}/{max_retries} using model {current_model}...")
-            
+
             response = completion(
                 model=current_model,
                 messages=messages,
@@ -263,15 +263,15 @@ def call_litellm(log_file, messages, model_name) -> (str, bool):
                 timeout=900,
                 max_tokens=8192
             )
-            
+
             end_time = time.time()
             log_time(log_file, start_time, end_time, "call_litellm", f"LLM call to {current_model}")
             return response['choices'][0]['message']['content'], True
-                
+
         except Exception as e:
             error_str = str(e)
             log_message(log_file, f"Attempt {attempt+1}/{max_retries} failed with model {current_model}: {error_str}")
-            
+
                         # Log the messages for debugging
             try:
                 # Create a simplified version of messages for logging
@@ -286,7 +286,7 @@ def call_litellm(log_file, messages, model_name) -> (str, bool):
                         'content_length': len(msg.get('content', '')) if isinstance(msg.get('content', ''), str) else 'non-string',
                         'content_preview': content
                     })
-                
+
                 log_message(log_file, f"Messages that caused the exception: {json.dumps(debug_messages, indent=2)}")
             except Exception as log_error:
                 log_message(log_file, f"Error while logging messages: {str(log_error)}")
@@ -297,7 +297,7 @@ def call_litellm(log_file, messages, model_name) -> (str, bool):
             is_overloaded = "Overloaded" in error_str
             is_rate_limited = "rate limit" in error_str.lower() or "too many requests" in error_str.lower()
             is_server_error = "server_error" in error_str or "server had an error" in error_str or "500" in error_str or "API usage limits" in error_str
-                        
+
             # For overloaded/rate limit errors, use exponential backoff
             if (is_auth_error or is_server_error or is_overloaded or is_rate_limited) and attempt < max_retries - 1:
                 fallback_model = get_fallback_model(current_model, tried_models_in_this_call)
@@ -314,7 +314,7 @@ def call_litellm(log_file, messages, model_name) -> (str, bool):
             else:
                 log_message(log_file, f"{log_prefix}: Error occurred, but no fallback models left to try. Attempted: {tried_models_in_this_call}")
                 # Proceed to normal backoff/failure logic
-            
+
             # For other errors or if we've exhausted model options
             if attempt < max_retries - 1:
                 # Still retry other errors with a shorter delay
@@ -325,7 +325,7 @@ def call_litellm(log_file, messages, model_name) -> (str, bool):
                 # This was our last attempt
                 log_message(log_file, f"All {max_retries} attempts failed. Giving up.")
                 return f"Exception after {max_retries} attempts: {error_str}", False
-    
+
     # Should not be reached if logic is correct
     log_message(log_file, f"Error: call_litellm exited loop unexpectedly after {max_retries} attempts.")
     return f"Unexpected error: all retries failed without exception", False
@@ -335,29 +335,29 @@ def call_o1_pro_api(log_file, messages, model_name):
     """Call OpenAI's o1-pro model using the responses API"""
     log_message(log_file, f"Calling {model_name} using responses API...")
     start_time = time.time()
-    
+
     user_message = ""
     for msg in messages:
         role = msg["role"]
         content = msg["content"]
         user_message += f"[{role.upper()}]: {content}\n"
-    
+
     if not user_message:
         log_message(log_file, "No user message found in conversation")
         return "No user message found", False
-    
+
     # Get API key from environment
     openai_api_key = os.environ.get("OPENAI_API_KEY")
     if not openai_api_key:
         log_message(log_file, "OPENAI_API_KEY environment variable not set")
         return "API key not set", False
-    
+
     # Prepare the request
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {openai_api_key}"
     }
-    
+
     data = {
         "model": model_name,
         "input": user_message
@@ -365,12 +365,12 @@ def call_o1_pro_api(log_file, messages, model_name):
     # Retry parameters
     max_retries = 5
     base_delay = 2  # Start with 2 seconds
-    
+
     for attempt in range(max_retries):
         try:
             if attempt > 0:
                 log_message(log_file, f"Retry attempt {attempt+1}/{max_retries}...")
-            
+
             response = requests.post(
                 "https://api.openai.com/v1/responses",
                 headers=headers,
@@ -379,14 +379,14 @@ def call_o1_pro_api(log_file, messages, model_name):
             )
             log_message(log_file, f"Request data: {json.dumps(data, indent=2)}")
             log_message(log_file, f"Response status: {response.status_code}")
-            
+
             # Print full response details
             try:
                 response_json = response.json()
                 log_message(log_file, f"Response JSON: {json.dumps(response_json, indent=2)}")
             except:
                 log_message(log_file, f"Raw response text: {response.text}")
-            
+
             # Log headers for debugging
             log_message(log_file, f"Response headers: {dict(response.headers)}")
 
@@ -394,11 +394,11 @@ def call_o1_pro_api(log_file, messages, model_name):
             if response.status_code != 200:
                 error_msg = f"API returned status code {response.status_code}: {response.text}"
                 log_message(log_file, error_msg)
-                
+
                 # Check if we should retry based on error type
                 is_rate_limited = response.status_code == 429
                 is_server_error = response.status_code >= 500
-                
+
                 if (is_rate_limited or is_server_error) and attempt < max_retries - 1:
                     delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
                     log_message(log_file, f"Waiting {delay:.2f} seconds before retry...")
@@ -406,24 +406,24 @@ def call_o1_pro_api(log_file, messages, model_name):
                     continue
                 else:
                     return f"API error: {error_msg}", False
-            
+
             # Parse the response
             response_data = response.json()
             content = response_data.get("content", "")
-            
+
             end_time = time.time()
             log_time(log_file, start_time, end_time, "call_o1_pro_api", f"LLM call to {model_name}")
-            
+
             return content, True
-            
+
         except Exception as e:
             error_str = str(e)
             log_message(log_file, f"Attempt {attempt+1}/{max_retries} failed: {error_str}")
-            
+
             # Determine error type and appropriate action
             is_timeout = "timeout" in error_str.lower()
             is_connection_error = "connection" in error_str.lower()
-            
+
             if (is_timeout or is_connection_error) and attempt < max_retries - 1:
                 delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
                 log_message(log_file, f"Waiting {delay:.2f} seconds before retry...")
@@ -437,12 +437,12 @@ def call_o1_pro_api(log_file, messages, model_name):
                 # This was our last attempt
                 log_message(log_file, f"All {max_retries} attempts failed. Giving up.")
                 return f"Exception after {max_retries} attempts: {error_str}", False
-    
+
     # This should never be reached due to the return in the last iteration of the loop
     return f"Unexpected error: all retries failed without exception", False
 
 def call_llm(log_file, messages, model_name):
-    """Call LLM with telemetry tracking."""    
+    """Call LLM with telemetry tracking."""
     with tracer.start_as_current_span("genai") as span:
         span.set_attribute("crs.action.category", "fuzzing")
         span.set_attribute("crs.action.name", "call_llm")
@@ -455,7 +455,7 @@ def call_llm(log_file, messages, model_name):
                 response = call_o1_pro_api(log_file, messages, model_name)
             else:
                 response = call_litellm(log_file, messages, model_name)
-            
+
             return response
 
         except Exception as e:
@@ -469,12 +469,12 @@ if False:
     exit(0)
 
 def extract_python_code_from_response(log_file, text, max_retries=2, timeout=30):
-    """    
+    """
     Args:
         text: The text containing code to extract
         max_retries: Maximum number of retry attempts
         timeout: Timeout in seconds for each API call
-        
+
     Returns:
         str: Extracted Python code or None if extraction failed
     """
@@ -485,8 +485,8 @@ def extract_python_code_from_response(log_file, text, max_retries=2, timeout=30)
         if candidate:                     # non-empty code
             log_message(log_file,
                         f"Quick-path extracted {len(candidate)} chars of code")
-            return candidate  
-            
+            return candidate
+
     prompt = f"Please extract the Python code from the following text to generate a correct exploit. Return with markdown code blocks ```python ```. No comment. No explanation.\n\nHere is the text:\n{text}"
     messages = [{"role": "user", "content": prompt}]
     use_a_model = OPENAI_MODEL
@@ -494,18 +494,18 @@ def extract_python_code_from_response(log_file, text, max_retries=2, timeout=30)
         try:
             print(f"Attempt {attempt+1}/{max_retries+1} to extract code with {use_a_model}")
             start_time = time.time()
-                            
+
             response = completion(
                 model=use_a_model,
                 messages=messages,
                 timeout=timeout
             )
-            
+
             end_time = time.time()
             print(f"API call completed in {end_time - start_time:.2f} seconds")
-            
+
             returned_text = response['choices'][0]['message']['content']
-            
+
             # Extract code from markdown blocks
             pattern = r"```(?:python)?\s*([\s\S]*?)```"
             matches = re.findall(pattern, returned_text)
@@ -517,22 +517,22 @@ def extract_python_code_from_response(log_file, text, max_retries=2, timeout=30)
                 print("Extracted code block was empty")
             else:
                 print("No code blocks found in response")
-                
+
                 # If no code blocks but response looks like code, return it directly
                 if "def " in returned_text or "class " in returned_text or "import " in returned_text:
                     print("Response looks like code, returning directly")
                     return returned_text.strip()
-            
+
         except Exception as e:
             error_msg = f"Error with {use_a_model} (attempt {attempt+1}): {str(e)}"
             print(error_msg)
-            
+
             # Wait before retrying (exponential backoff)
             if attempt < max_retries:
                 wait_time = 2 ** attempt  # 1, 2, 4, 8, ... seconds
                 print(f"Waiting {wait_time} seconds before retry")
                 time.sleep(wait_time)
-    
+
     use_another_model = CLAUDE_MODEL_35
     try:
         print(f"Falling back to {use_another_model}")
@@ -552,10 +552,10 @@ def extract_python_code_from_response(log_file, text, max_retries=2, timeout=30)
 
     except Exception as e:
         print(f"Fallback to {use_another_model} also failed: {str(e)}")
-    
+
     # Last resort: try to extract code directly from the input text
     print("Attempting direct code extraction from input text")
-    
+
     # Look for common Python patterns in the text
     python_patterns = [
         r"def\s+\w+\s*\([^)]*\)\s*:",  # Function definitions
@@ -567,28 +567,28 @@ def extract_python_code_from_response(log_file, text, max_retries=2, timeout=30)
         r"while\s+.*?:",  # While loops
         r"try\s*:",  # Try blocks
     ]
-    
+
     # Find the longest text segment that looks like Python code
     potential_code_segments = []
-    
+
     for pattern in python_patterns:
         matches = re.finditer(pattern, text)
         for match in matches:
             # Get the position of the match
             start_pos = match.start()
-            
+
             # Extract a chunk of text starting from this position
             code_chunk = text[start_pos:start_pos + 5000]  # Limit to 5000 chars
-            
+
             # Add to potential segments
             potential_code_segments.append(code_chunk)
-    
+
     if potential_code_segments:
         # Return the longest segment
         longest_segment = max(potential_code_segments, key=len)
         print(f"Extracted {len(longest_segment)} characters directly from text")
         return longest_segment
-    
+
     print("All extraction methods failed")
     return None
 
@@ -610,50 +610,50 @@ def process_large_diff(diff_content, log_file):
     """Process a large diff to extract the most relevant parts for vulnerability analysis"""
     # Split the diff into individual file changes
     file_diffs = re.split(r'diff --git ', diff_content)
-    
+
     # The first element is usually empty or contains the commit message
     if file_diffs and not file_diffs[0].strip().startswith('a/'):
         header = file_diffs[0]
         file_diffs = file_diffs[1:]
     else:
         header = ""
-    
+
     # Add the 'diff --git' prefix back to each file diff except the header
     file_diffs = ["diff --git " + d if d.strip() else d for d in file_diffs]
-    
+
     # Extract useful information about the diff
     total_files = len(file_diffs)
     log_message(log_file, f"Diff contains changes to {total_files} files")
-    
+
     # Focus only on C and Java files
     c_extensions = ['.c', '.h']
     java_extensions = ['.java']
     binary_indicators = ['Binary files', 'GIT binary patch']
-    
+
     # Categorize files by language
     c_files = []
     java_files = []
     other_files = 0
     binary_files = 0
-    
+
     for file_diff in file_diffs:
         if not file_diff.strip():
             continue
-            
+
         # Skip binary files
         if any(indicator in file_diff for indicator in binary_indicators):
             binary_files += 1
             continue
-        
+
         # Try to extract the filename
         match = re.search(r'a/([^\s]+)', file_diff)
         if not match:
             other_files += 1
             continue
-            
+
         filename = match.group(1)
         ext = os.path.splitext(filename)[1].lower()
-        
+
         # Categorize based on extension
         if ext in c_extensions:
             c_files.append((filename, file_diff))
@@ -661,10 +661,10 @@ def process_large_diff(diff_content, log_file):
             java_files.append((filename, file_diff))
         else:
             other_files += 1
-    
+
     log_message(log_file, f"Categorized files: {len(c_files)} C files, {len(java_files)} Java files, "
                           f"{binary_files} binary files, {other_files} other files")
-    
+
     # Security keywords specific to C and Java
     c_security_keywords = [
         'overflow', 'underflow', 'bounds', 'check', 'validate', 'sanitize', 'input',
@@ -681,7 +681,7 @@ def process_large_diff(diff_content, log_file):
         'integer', 'signed', 'unsigned', 'cast', 'conversion',
         'stack', 'heap', 'use-after-free', 'double-free'
     ]
-    
+
     java_security_keywords = [
         'overflow', 'underflow', 'bounds', 'check', 'validate', 'sanitize', 'input',
         'buffer', 'size', 'length', 'null', 'crash', 'assert', 'exception',
@@ -695,45 +695,45 @@ def process_large_diff(diff_content, log_file):
         'XSS', 'CSRF', 'SSRF', 'XXE', 'RCE', 'JNDI', 'LDAP', 'JMX',
         'ArrayIndexOutOfBoundsException', 'NullPointerException'
     ]
-    
+
     # Score C files
     scored_c_files = []
     for filename, file_diff in c_files:
         score = 0
-        
+
         # Check for security keywords in the diff
         for keyword in c_security_keywords:
             score += file_diff.lower().count(keyword) * 2
-        
+
         # Check for added/removed lines that might indicate security changes
         added_lines = len(re.findall(r'^\+(?!\+\+)', file_diff, re.MULTILINE))
         removed_lines = len(re.findall(r'^-(?!--)', file_diff, re.MULTILINE))
         score += (added_lines + removed_lines) // 5  # More changes = higher score
-        
+
         # Bonus for certain high-risk C functions or patterns
         high_risk_c_patterns = [
-            'memcpy', 'strcpy', 'strcat', 'sprintf', 'gets', 'malloc', 'free', 
+            'memcpy', 'strcpy', 'strcat', 'sprintf', 'gets', 'malloc', 'free',
             'sizeof', '[', ']', '->', 'char *', 'void *', 'int *'
         ]
         for pattern in high_risk_c_patterns:
             score += file_diff.count(pattern) * 3
-        
+
         scored_c_files.append((score, filename, file_diff))
-    
+
     # Score Java files
     scored_java_files = []
     for filename, file_diff in java_files:
         score = 0
-        
+
         # Check for security keywords in the diff
         for keyword in java_security_keywords:
             score += file_diff.lower().count(keyword) * 2
-        
+
         # Check for added/removed lines that might indicate security changes
         added_lines = len(re.findall(r'^\+(?!\+\+)', file_diff, re.MULTILINE))
         removed_lines = len(re.findall(r'^-(?!--)', file_diff, re.MULTILINE))
         score += (added_lines + removed_lines) // 5  # More changes = higher score
-        
+
         # Bonus for certain high-risk Java patterns
         high_risk_java_patterns = [
             'Runtime.exec', 'ProcessBuilder', 'System.load', 'URLClassLoader',
@@ -743,31 +743,31 @@ def process_large_diff(diff_content, log_file):
         ]
         for pattern in high_risk_java_patterns:
             score += file_diff.count(pattern) * 3
-        
+
         scored_java_files.append((score, filename, file_diff))
-    
+
     # Sort by score (highest first)
     scored_c_files.sort(reverse=True)
     scored_java_files.sort(reverse=True)
-    
+
     # Build the processed diff
     processed_diff = header + "\n\n"
     processed_diff += f"# Processed diff summary: {total_files} files changed\n"
-    
+
     # Determine which language to prioritize based on file counts and scores
     c_max_score = scored_c_files[0][0] if scored_c_files else 0
     java_max_score = scored_java_files[0][0] if scored_java_files else 0
-    
+
     if len(c_files) > 0 and (len(java_files) == 0 or c_max_score >= java_max_score):
         # Prioritize C files
         processed_diff += f"# Showing most security-relevant changes from C files ({len(c_files)} total C files)\n\n"
-        
+
         # Add the top N most relevant C files
         max_c_files = min(10, len(scored_c_files))
         for i, (score, filename, file_diff) in enumerate(scored_c_files[:max_c_files]):
             processed_diff += f"# C File {i+1}: {filename} (relevance score: {score})\n"
             processed_diff += file_diff + "\n\n"
-        
+
         # Add some Java files if available and space permits
         if java_files and len(processed_diff) < 40000:
             max_java_files = min(3, len(scored_java_files))
@@ -778,13 +778,13 @@ def process_large_diff(diff_content, log_file):
     else:
         # Prioritize Java files
         processed_diff += f"# Showing most security-relevant changes from Java files ({len(java_files)} total Java files)\n\n"
-        
+
         # Add the top N most relevant Java files
         max_java_files = min(10, len(scored_java_files))
         for i, (score, filename, file_diff) in enumerate(scored_java_files[:max_java_files]):
             processed_diff += f"# Java File {i+1}: {filename} (relevance score: {score})\n"
             processed_diff += file_diff + "\n\n"
-        
+
         # Add some C files if available and space permits
         if c_files and len(processed_diff) < 40000:
             max_c_files = min(3, len(scored_c_files))
@@ -792,7 +792,7 @@ def process_large_diff(diff_content, log_file):
             for i, (score, filename, file_diff) in enumerate(scored_c_files[:max_c_files]):
                 processed_diff += f"# C File {i+1}: {filename} (relevance score: {score})\n"
                 processed_diff += file_diff + "\n\n"
-    
+
     log_message(log_file, f"Processed diff size: {len(processed_diff)} bytes (original: {len(diff_content)} bytes)")
     return processed_diff
 
@@ -811,7 +811,7 @@ def process_large_diff(diff_content, log_file):
 def get_commit_info(log_file, project_dir, language):
     """Get information about the commit that introduced the vulnerability"""
     if TEST_NGINX == True:
-        commit_file = os.path.join(project_dir, f"commit_{CPV}.txt")        
+        commit_file = os.path.join(project_dir, f"commit_{CPV}.txt")
         with open(commit_file, "r") as f:
             commit_content = f.read()
             return "Commit 45", commit_content
@@ -840,13 +840,13 @@ def get_commit_info(log_file, project_dir, language):
             cwd=project_dir,
             text=True
         )
-        
+
         git_diff = subprocess.check_output(
             ["git", "diff", "HEAD~1", "HEAD"],
             cwd=project_dir,
             text=True
         )
-        
+
         log_message(log_file, f"Latest commit: {git_log}")
         return git_log, git_diff
     except subprocess.CalledProcessError as e:
@@ -858,47 +858,47 @@ def is_likely_source_for_fuzzer(file_base, fuzzer_name, base_name):
     # Exact matches
     if file_base == fuzzer_name or file_base == base_name:
         return True
-    
+
     # Common patterns:
     # 1. fuzzer_name = "xyz_fuzzer" and file_base = "xyz"
     if fuzzer_name == f"{file_base}_fuzzer":
         return True
-    
+
     # 2. fuzzer_name = "xyz_fuzzer" and file_base = "xyz_fuzz"
     if base_name == f"{file_base}_fuzz":
         return True
-        
+
     # 3. fuzzer_name = "xyz_fuzzer" and file_base = "fuzz_xyz"
     if base_name == f"fuzz_{file_base}":
         return True
-        
+
     # 4. fuzzer_name = "xyz_fuzzer" and file_base = "xyz_test"
     if base_name == f"{file_base}_test":
         return True
-        
+
     # 5. fuzzer_name = "xyz_fuzzer" and file_base = "test_xyz"
     if base_name == f"test_{file_base}":
         return True
-        
+
     # 6. fuzzer_name = "xyz_abc_fuzzer" and file_base = "xyz_abc"
     if fuzzer_name.startswith(f"{file_base}_"):
         return True
-        
+
     # 7. fuzzer_name = "xyz_fuzzer" and file_base = "libxyz"
     if base_name == file_base.replace("lib", ""):
         return True
-        
+
     # 8. fuzzer_name = "libxyz_fuzzer" and file_base = "xyz"
     if file_base == base_name.replace("lib", ""):
         return True
-    
+
     return False
 
 def strip_license_text(source_code):
     """Strip copyright and license text from source code"""
     # Common patterns that indicate license blocks
     license_start_patterns = [
-        "/*", 
+        "/*",
         "/**",
         "// Copyright",
         "/* Copyright",
@@ -909,12 +909,12 @@ def strip_license_text(source_code):
         "// SPDX-License-Identifier",
         "/* SPDX-License-Identifier"
     ]
-    
+
     license_end_patterns = [
         "*/",
         "**/"
     ]
-    
+
     # Check if the source starts with a license block
     lines = source_code.split('\n')
     in_license_block = False
@@ -923,28 +923,28 @@ def strip_license_text(source_code):
     # First, try to find a license block with clear start and end markers
     for i, line in enumerate(lines):
         stripped_line = line.strip()
-        
+
         # Check for license block start
         if not in_license_block:
             for pattern in license_start_patterns:
-                if stripped_line.startswith(pattern) and ("copyright" in stripped_line.lower() or 
+                if stripped_line.startswith(pattern) and ("copyright" in stripped_line.lower() or
                                                          "license" in stripped_line.lower() or
                                                          "permission" in stripped_line.lower() or
                                                          "redistribution" in stripped_line.lower()):
                     in_license_block = True
                     break
-        
+
         # Check for license block end if we're in a block
         elif in_license_block:
             for pattern in license_end_patterns:
                 if stripped_line.endswith(pattern) and not any(p in stripped_line for p in license_start_patterns):
                     license_end_line = i
                     break
-            
+
             # If we found the end, stop looking
             if license_end_line >= 0:
                 break
-    
+
     # If we found a license block with clear markers, remove it
     if in_license_block and license_end_line >= 0:
         return '\n'.join(lines[license_end_line+1:]).strip()
@@ -957,19 +957,19 @@ def strip_license_text(source_code):
         # Skip empty lines
         if not stripped_line:
             continue
-        
+
         # If it's not a comment line, this is likely the start of actual code
         if not stripped_line.startswith('//') and not stripped_line.startswith('/*') and not stripped_line.startswith('*') and not stripped_line.startswith('#'):
             first_code_line = i
             break
-    
+
     # If the first several lines contain copyright/license keywords, skip them
     if first_code_line > 0:
         header_text = '\n'.join(lines[:first_code_line]).lower()
-        if ("copyright" in header_text or "license" in header_text or 
+        if ("copyright" in header_text or "license" in header_text or
             "permission" in header_text or "redistribution" in header_text):
             return '\n'.join(lines[first_code_line:]).strip()
-    
+
     # If we couldn't identify a license block, return the original code
     return source_code
 
@@ -978,7 +978,7 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
 
     fuzzer_name = os.path.basename(fuzzer_path)
     project_dir = fuzzer_path.split("/fuzz-tooling/build/out")[0] + "/"
-    
+
     # Try multiple possible source directories
     possible_src_dirs = [
         project_src_dir,  # Original path (e.g., afc-sqlite3-address)
@@ -986,27 +986,27 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
         os.path.join(project_dir, project_name),  # Direct project name (e.g., sqlite3)
         os.path.join(project_dir, f"afc-{project_name}"),  # With afc- prefix
     ]
-    
+
     # Find the first directory that actually exists
     actual_src_dir = None
     for src_dir in possible_src_dirs:
         if os.path.exists(src_dir):
             actual_src_dir = src_dir
             break
-    
+
     if not actual_src_dir:
         actual_src_dir = project_src_dir  # Fallback to original
-    
+
     log_message(log_file, f"Looking for source of {fuzzer_name} in {actual_src_dir} (original: {project_src_dir})")
-    
+
     # Update project_src_dir to the actual directory that exists
     project_src_dir = actual_src_dir
-    
+
     # Extract the base name without _fuzzer suffix if present
     base_name = fuzzer_name
     if "_fuzzer" in base_name:
         base_name = base_name.replace("_fuzzer", "")
-    
+
     # First, collect all build scripts
     build_script_paths = []
     build_script_contents = {}
@@ -1023,7 +1023,7 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
                         build_script_contents[script_path] = f.read()
                 except Exception as e:
                     log_message(log_file, f"Error reading build script {script_path}: {str(e)}")
-    
+
     if len(build_script_paths) ==0:
         if os.path.exists(project_src_dir):
             for root, dirs, files in os.walk(project_src_dir):
@@ -1035,11 +1035,11 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
                             build_script_contents[script_path] = f.read()
                     except Exception as e:
                         log_message(log_file, f"Error reading build script {script_path}: {str(e)}")
-    
+
     # log_message(log_file, f"Found {len(build_script_paths)} build.sh files")
-    
+
     # Collect potential source files
-    source_files = {}        
+    source_files = {}
     extensions = ['.c', '.cc']
     if not language.startswith('c'):
         extensions =['.java']
@@ -1054,7 +1054,7 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
                     # Check if the file name matches common fuzzer naming patterns
                     file_name = os.path.basename(file_path)
                     file_base = os.path.splitext(file_name)[0]
-                    
+
                     # If we find a likely match, return it immediately
                     if is_likely_source_for_fuzzer(file_base, fuzzer_name, base_name):
                         try:
@@ -1073,7 +1073,7 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
                                 source_files[file_path] = content
                     except Exception as e:
                         log_message(log_file, f"Error reading source file {file_path}: {str(e)}")
-    
+
     # ------------------------------------------------------------------
     # Also look in pkgs/ directories and archives (NEW)
     # ------------------------------------------------------------------
@@ -1124,9 +1124,9 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
         fuzz_dir = os.path.join(script_dir, "fuzz")
         if os.path.exists(fuzz_dir):
             fuzz_dirs.append(fuzz_dir)
-    
+
     if os.path.exists(project_src_dir):
-        for root, dirs, files in os.walk(project_src_dir):                
+        for root, dirs, files in os.walk(project_src_dir):
             # Add any directory with "fuzz" in its name
             for dir_name in dirs:
                 if "fuzz" in dir_name.lower():
@@ -1139,14 +1139,14 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
         # Then search more broadly for any directory that might contain fuzzer sources
         fuzzer_related_dirs = []
         for root, dirs, files in os.walk(project_src_dir):
-                
+
             # Look for directories with fuzzer-related names
             for dir_name in dirs:
                 lower_dir = dir_name.lower()
                 if "fuzz" in lower_dir or "harness" in lower_dir:
                     fuzzer_dir = os.path.join(root, dir_name)
                     fuzzer_related_dirs.append(fuzzer_dir)
-                    
+
             # Also look for directories containing fuzzer-related files
             has_fuzzer_files = False
             for file in files:
@@ -1154,15 +1154,15 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
                 if "fuzz" in lower_file:
                     has_fuzzer_files = True
                     break
-            
+
             if has_fuzzer_files:
                 fuzzer_related_dirs.append(root)
-        
+
         # Add unique directories to our fuzz_dirs list
         for dir_path in fuzzer_related_dirs:
             if dir_path not in fuzz_dirs:
                 fuzz_dirs.append(dir_path)
-    
+
     log_message(log_file, f"Found {len(fuzz_dirs)} potential fuzzer-related directories")
 
     for fuzz_dir in fuzz_dirs:
@@ -1198,17 +1198,17 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
         only_file_path = list(source_files.keys())[0]
         log_message(log_file, f"Only one source file found, returning it: {only_file_path}")
         return strip_license_text(source_files[only_file_path]), only_file_path
-    
+
     # If we have too many source files, filter them to the most likely candidates
     if len(source_files) > 20:
         filtered_source_files = {}
-        
+
         # Prioritize files with names similar to the fuzzer
         for file_path, content in source_files.items():
             file_name = os.path.basename(file_path)
             if fuzzer_name in file_name or base_name in file_name:
                 filtered_source_files[file_path] = content
-        
+
         # If we still have too few, add files that mention the fuzzer name in their content
         if len(filtered_source_files) < 5:
             for file_path, content in source_files.items():
@@ -1216,10 +1216,10 @@ def find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, lan
                     filtered_source_files[file_path] = content
                     if len(filtered_source_files) >= 10:
                         break
-        
+
         source_files = filtered_source_files
         log_message(log_file, f"Filtered to {len(source_files)} most likely source files")
-    
+
     # Prepare the prompt for the model
     prompt = f"""I need to identify the source code file for a fuzzer named '{fuzzer_name}' (base name: '{base_name}').
 Please analyze the following build scripts and source files to determine which file is most likely the fuzzer source.
@@ -1228,29 +1228,29 @@ The fuzzer binary is located at: {fuzzer_path}
 
 BUILD SCRIPTS:
 """
-    
+
     # Add build scripts to the prompt
     for script_path, content in build_script_contents.items():
         prompt += f"\n--- {script_path} ---\n{content}\n"
-    
+
     prompt += "\nSOURCE FILES:\n"
-    
+
     # Add source files to the prompt
     for file_path, content in source_files.items():
         # Add a short preview of each file
         lines = content.split('\n')
         preview = '\n'.join(lines[:20]) + ('\n... (file continues)' if len(lines) > 20 else '')
         prompt += f"\n--- {file_path} ---\n{preview}\n"
-    
+
     prompt += """
 Based on the build scripts and source files, which file is most likely the source code for the fuzzer?
 Please respond with just the full path to the file you believe is the fuzzer source code.
 """
-    
+
     # Call the model to identify the fuzzer source
     messages = [{"role": "user", "content": prompt}]
     response, success = call_llm(log_file, messages, CLAUDE_MODEL)
-    
+
     if not success:
         log_message(log_file, "Failed to get model response for fuzzer source identification")
         # Fall back to the most likely file based on name
@@ -1261,23 +1261,23 @@ Please respond with just the full path to the file you believe is the fuzzer sou
                file_name == f"{fuzzer_name}.java" or file_name == f"{base_name}.java":
                 log_message(log_file, f"Falling back to likely fuzzer source: {file_path}")
                 return strip_license_text(source_files[file_path]), file_path
-        
+
         log_message(log_file, "Could not identify fuzzer source")
         return "// Could not find the source code for the fuzzer", ""
-    
+
     # Parse the model's response to get the file path
     response = response.strip()
-    
+
     # Extract the file path from the response
     file_path_match = re.search(r'(/[^\s]+)', response)
     if file_path_match:
         identified_path = file_path_match.group(1)
         log_message(log_file, f"Model identified fuzzer source as: {identified_path}")
-        
+
         # Check if the identified path is in our collected source files
         if identified_path in source_files:
             return strip_license_text(source_files[identified_path]), identified_path
-        
+
         # If not, try to read the file directly
         if os.path.exists(identified_path):
             try:
@@ -1287,10 +1287,10 @@ Please respond with just the full path to the file you believe is the fuzzer sou
                     return strip_license_text(content), identified_path
             except Exception as e:
                 log_message(log_file, f"Error reading identified source: {str(e)}")
-    
+
     # If the model couldn't identify the file or we couldn't read it, fall back to our original approach
     log_message(log_file, "Model couldn't identify the fuzzer source or the identified file couldn't be read")
-    
+
     # Fall back to the most likely file based on name
     for file_path in source_files.keys():
         file_name = os.path.basename(file_path)
@@ -1299,7 +1299,7 @@ Please respond with just the full path to the file you believe is the fuzzer sou
            file_name == f"{fuzzer_name}.java" or file_name == f"{base_name}.java":
             log_message(log_file, f"Falling back to likely fuzzer source: {file_path}")
             return strip_license_text(source_files[file_path]), file_path
-    
+
     log_message(log_file, "Could not identify fuzzer source")
     return "// Could not find the source code for the fuzzer", ""
 
@@ -1310,11 +1310,11 @@ def run_python_code(log_file, code, xbin_dir):
     if not xbin_dir or not os.path.isdir(xbin_dir):
         log_message(log_file, f"Invalid project directory: '{xbin_dir}'")
         return False, "", f"Invalid project directory: '{xbin_dir}'"
-    
+
     with tempfile.NamedTemporaryFile(suffix='.py', delete=False) as temp_file:
         temp_file.write(code.encode('utf-8'))
         temp_file_path = temp_file.name
-    
+
     try:
         # log_message(log_file, f"Running generated Python code from {temp_file_path}")
         result = subprocess.run(
@@ -1324,20 +1324,20 @@ def run_python_code(log_file, code, xbin_dir):
             text=True,
             timeout=30
         )
-        
+
         log_message(log_file, f"Python code execution stdout: {result.stdout}")
         if result.stderr:
             log_message(log_file, f"Python code execution stderr: {result.stderr}")
-        
+
         # Check if x.bin was created
         for i in range(6):  # 0 through 5
             blob_name = "x.bin" if i == 0 else f"x{i}.bin"
             blob_path = os.path.join(xbin_dir, blob_name)
-            
+
             if os.path.exists(blob_path):
                 log_message(log_file, f"{blob_name} was created successfully ({os.path.getsize(blob_path)} bytes)")
                 return True, result.stdout, result.stderr
-        
+
         # If we get here, no blob file was found
         log_message(log_file, f"No blob file (x.bin through x5.bin) was created")
         return False, result.stdout, result.stderr
@@ -1355,7 +1355,7 @@ def run_python_code(log_file, code, xbin_dir):
 def filter_instrumented_lines(text, max_line_length=200):
     if not text:
         return text
-    
+
     filtered_lines = []
     for line in text.splitlines():
         # Skip lines containing "INFO: Instrumented"
@@ -1363,14 +1363,14 @@ def filter_instrumented_lines(text, max_line_length=200):
             continue
         # Drop noisy sanitizer/SQLite warnings
         if line.lstrip().startswith("WARNING:"):
-            continue                        
+            continue
         # Truncate long lines
         if len(line) > max_line_length:
             truncated = line[:max_line_length] + f" ... (truncated, full length: {len(line)})"
             filtered_lines.append(truncated)
         else:
             filtered_lines.append(line)
-            
+
     return '\n'.join(filtered_lines)
 
 def run_fuzzer_with_input_for_c_coverage(
@@ -1479,7 +1479,7 @@ def run_fuzzer_with_input_for_c_coverage(
 def run_fuzzer_with_input(log_file, fuzzer_path, project_dir, focus, blob_path, is_c_project=True):
     try:
         log_message(log_file, f"Running fuzzer {fuzzer_path} with blob {blob_path}")
-        
+
         # Get the directory containing the fuzzer
         fuzzer_dir = os.path.dirname(fuzzer_path)
         fuzzer_name = os.path.basename(fuzzer_path)
@@ -1499,36 +1499,36 @@ def run_fuzzer_with_input(log_file, fuzzer_path, project_dir, focus, blob_path, 
             # Extract project name and sanitizer from the fuzzer path
             # Example path: /app/7d1205de-e1b8-4979-877d-a560e5b3cf0a/fuzz-tooling/build/out/libpng-address/libpng_read_fuzzer
             path_parts = fuzzer_dir.split('/')
-            
+
             # Find the part that contains project-sanitizer (e.g., "libpng-address" or "metadata-extractor-address")
             project_sanitizer = None
             for part in path_parts:
                 if '-' in part and any(san in part for san in ['address', 'undefined', 'memory']):
                     project_sanitizer = part
                     break
-            
+
             if not project_sanitizer:
                 log_message(log_file, f"Could not determine project and sanitizer from path: {fuzzer_path}")
                 return False, f"Could not determine project and sanitizer from path: {fuzzer_path}"
-            
+
             # Split into project and sanitizer - handle project names that may contain hyphens
             # The sanitizer is always the last part after the last hyphen
             parts = project_sanitizer.split('-')
             sanitizer = parts[-1]  # Last part is the sanitizer
             project_name = '-'.join(parts[:-1])  # Everything before the last hyphen is the project name
-            
+
             # log_message(log_file, f"Extracted project name: '{project_name}' and sanitizer: '{sanitizer}'")
-            
+
             sanitizer_project_dir = os.path.join(project_dir, focus+"-"+sanitizer)
             out_dir = os.path.dirname(fuzzer_path)
             out_dir_x = os.path.join(out_dir, f"xp0")
 
             work_dir = os.path.join(project_dir, "fuzz-tooling", "build", "work", f"{project_name}-{sanitizer}")
-            
+
             unique_id = str(uuid.uuid4())[:8]  # Use first 8 chars of UUID for brevity
             unique_blob_name = f"x_{unique_id}.bin"
             # Try multiple approaches to make the blob accessible to Docker
-            docker_blob_path = os.path.join(out_dir_x, unique_blob_name)            
+            docker_blob_path = os.path.join(out_dir_x, unique_blob_name)
             # Approach 1: Try direct copy
             try:
                 shutil.copy(blob_path, docker_blob_path)
@@ -1557,7 +1557,7 @@ def run_fuzzer_with_input(log_file, fuzzer_path, project_dir, focus, blob_path, 
                     "-timeout_exitcode=99",  # Set specific exit code for timeouts
                     f'/out/{unique_blob_name}'
                 ]
-                
+
                 # Only add instrumentation and coverage options if USE_CONTROL_FLOW is True
                 if USE_CONTROL_FLOW:
                     if not is_c_project:
@@ -1567,14 +1567,14 @@ def run_fuzzer_with_input(log_file, fuzzer_path, project_dir, focus, blob_path, 
                         docker_cmd.insert(-3, f"--coverage_dump=/out/coverage.exec")
 
             log_message(log_file, f"Running Docker command: {' '.join(docker_cmd)}")
-            
+
             result = subprocess.run(
                 docker_cmd,
                 capture_output=True,
                 text=True,
                 timeout=60
             )
-        
+
         #quick path
         combined_output = result.stderr + "\n" + result.stdout
         if result.returncode == 0 and ("ABORTING" not in combined_output):
@@ -1588,7 +1588,7 @@ def run_fuzzer_with_input(log_file, fuzzer_path, project_dir, focus, blob_path, 
         # log_message(log_file, f"Fuzzer stdout: {result.stdout}")
         if result.stderr:
             log_message(log_file, f"Fuzzer stderr: {result.stderr}")
-        
+
 
         crash_indicators = [
             "ERROR: AddressSanitizer:",
@@ -1619,7 +1619,7 @@ def run_fuzzer_with_input(log_file, fuzzer_path, project_dir, focus, blob_path, 
             else:
                 log_message(log_file, f"Fuzzer exited with non-zero code {result.returncode}, but no crash indicators found")
                 return False, combined_output
-    
+
     except subprocess.TimeoutExpired:
         log_message(log_file, "Fuzzer execution timed out")
         return False, "Execution timed out"
@@ -1630,9 +1630,9 @@ def run_fuzzer_with_input(log_file, fuzzer_path, project_dir, focus, blob_path, 
 
 def generate_pov(log_file, project_dir, messages, model_name):
     """Generate a Proof of Vulnerability payload"""
-   
+
     function_start_time = time.time()
-    
+
     response, success = call_llm(log_file, messages, model_name)
     if (not success) or (response is None) or (not response.strip()):
         log_message(log_file, f"Failed to get valid response from {model_name}")
@@ -1642,21 +1642,21 @@ def generate_pov(log_file, project_dir, messages, model_name):
 
     # Check if the response is a refusal or non-compliance message
     refusal_phrases = [
-       "cannot comply", "can't comply", 
-        "against my", 
+       "cannot comply", "can't comply",
+        "against my",
         "ethical guidelines"
     ]
-    
+
     is_refusal = False
     response_lower = response.lower()
-        
+
 
     for phrase in refusal_phrases:
         if phrase in response_lower:
             is_refusal = True
             log_message(log_file, f"Model refused to generate PoV with message: '{response[:100]}...'")
             break
-    
+
     # Only append to message history if it's not a refusal
     if not is_refusal:
         messages.append({"role": "assistant", "content": response})
@@ -1668,7 +1668,7 @@ def generate_pov(log_file, project_dir, messages, model_name):
 
     function_end_time = time.time()
     log_time(log_file, function_start_time, function_end_time, "generate_pov", f"Time for PoV generation by {model_name}")
-        
+
     code = extract_python_code_from_response(log_file, response)
     if code:
         return code
@@ -1687,23 +1687,23 @@ def extract_java_fallback_location(output):
             line_no          = m.group(3)   # 42
             return f"{qualified_method}:{line_no}"
     return ""
-    
+
 def extract_crash_location(output, sanitizer):
     """
     Extract the crash location from the output.
-    
+
     Args:
         output: The crash output
         sanitizer: The sanitizer type
-        
+
     Returns:
         str: The crash location or empty string if not found
     """
     import re
-    
+
     # Look for the #0 line in the stack trace which indicates the crash point
     lines = output.split('\n')
-    
+
     # First try to find the #0 line which is the most reliable indicator
     for line in lines:
         line = line.strip()
@@ -1712,14 +1712,14 @@ def extract_crash_location(output, sanitizer):
             parts = line.split(' in ', 1)
             if len(parts) < 2:
                 continue
-            
+
             # Get the function name and file location
             func_info = parts[1]
-            
+
             # Clean up any extra information in parentheses
             if ' (' in func_info:
                 func_info = func_info.split(' (', 1)[0]
-            
+
             # Remove column information (e.g., ":13" in "file.c:123:13")
             last_colon_idx = func_info.rfind(':')
             if last_colon_idx != -1:
@@ -1744,7 +1744,7 @@ def extract_crash_location(output, sanitizer):
         return extract_ubsan_fallback_location(output)
     elif sanitizer in ["memory", "msan"]:
         return extract_msan_fallback_location(output)
-    
+
     # If all else fails, look for any file path with a line number
     for line in lines:
         if '/src/' in line and '.c:' in line:
@@ -1752,7 +1752,7 @@ def extract_crash_location(output, sanitizer):
             match = re.search(r'(/src/[^:]+:\d+)', line)
             if match:
                 return match.group(1)
-    
+
     return ""
 
 def extract_asan_fallback_location(output):
@@ -1762,7 +1762,7 @@ def extract_asan_fallback_location(output):
     match = re.search(r'SUMMARY: AddressSanitizer: \w+ ([^(]+)', output)
     if match:
         return match.group(1).strip()
-    
+
     return ""
 
 def extract_ubsan_fallback_location(output):
@@ -1772,7 +1772,7 @@ def extract_ubsan_fallback_location(output):
     match = re.search(r'([^:]+:\d+:\d+): runtime error:', output)
     if match:
         return match.group(1)
-    
+
     return ""
 
 def extract_msan_fallback_location(output):
@@ -1782,7 +1782,7 @@ def extract_msan_fallback_location(output):
     match = re.search(r'MemorySanitizer:.*? at ([^:]+:\d+)', output)
     if match:
         return match.group(1)
-    
+
     return ""
 
 
@@ -1790,28 +1790,28 @@ def generate_vulnerability_signature(output, sanitizer):
     """
     Create a unique signature for a vulnerability to identify duplicates
     based on the crash output and sanitizer.
-    
+
     Args:
         output: The crash output
         sanitizer: The sanitizer type (address, undefined, memory, etc.)
-        
+
     Returns:
         str: A unique signature for the vulnerability
     """
     import hashlib
     import re
-    
+
     def hash_string(s):
         """Create a hash of a string."""
         return hashlib.md5(s.encode()).hexdigest()
-    
+
     # Extract the crash location from the stack trace
     crash_location = extract_crash_location(output, sanitizer)
-    
+
     # If we couldn't extract a specific location, fall back to a hash
     if not crash_location:
         return f"{sanitizer.upper()}:generic:{hash_string(output)}"
-    
+
     # Create a signature with the sanitizer type and crash location
     return f"{crash_location}"
 
@@ -1831,7 +1831,7 @@ def extract_crash_trace(fuzzer_output):
         # Generic Java exception format (fallback)
         {"marker": "Exception in thread", "end_marker": None}
     ]
-    
+
     # Try each pattern
     for pattern in patterns:
         marker_index = fuzzer_output.find(pattern["marker"])
@@ -1841,27 +1841,27 @@ def extract_crash_trace(fuzzer_output):
                 end_index = fuzzer_output.find(pattern["end_marker"], marker_index)
                 if end_index != -1:
                     return fuzzer_output[marker_index:end_index].strip()
-            
+
             # If no end marker or end marker not found, take everything to the end
             return fuzzer_output[marker_index:].strip()
-    
+
     return fuzzer_output
 
 def submit_pov_to_endpoint(log_file, project_dir, pov_metadata):
     """
     Submit the POV to the submission endpoint.
-    
+
     Args:
         log_file: Log file handle
         project_dir: Project directory
         pov_metadata: Metadata about the successful POV
-        
+
     Returns:
         bool: True if submission was successful, False otherwise
     """
 
     log_message(log_file, "Submitting POV to submission endpoint")
-    
+
     # Get API credentials from environment
     api_key_id = os.environ.get("COMPETITION_API_KEY_ID")
     api_token = os.environ.get("COMPETITION_API_KEY_TOKEN")
@@ -1871,64 +1871,64 @@ def submit_pov_to_endpoint(log_file, project_dir, pov_metadata):
     if not submission_endpoint:
         log_message(log_file, "SUBMISSION_ENDPOINT environment variable not set, skipping submission")
         return False
-        
+
     if not task_id:
         log_message(log_file, "TASK_ID environment variable not set, skipping submission")
         return False
-        
+
     if not api_key_id or not api_token:
         api_key_id = os.environ.get("CRS_KEY_ID")
         api_token = os.environ.get("CRS_KEY_TOKEN")
         if not api_key_id or not api_token:
             log_message(log_file, "API credentials not set, skipping submission")
             return False
-    
+
     # Read the blob file
     blob_path = os.path.join(POV_SUCCESS_DIR, pov_metadata.get("blob_file", ""))
     if not os.path.exists(blob_path):
         log_message(log_file, f"Blob file {blob_path} does not exist, skipping submission")
         return False
-        
+
     with open(blob_path, "rb") as f:
         blob_data = f.read()
-    
+
     # Read the fuzzer output
     fuzzer_output_path = os.path.join(POV_SUCCESS_DIR, pov_metadata.get("fuzzer_output", ""))
     if not os.path.exists(fuzzer_output_path):
         log_message(log_file, f"Fuzzer output file {fuzzer_output_path} does not exist, skipping submission")
         return False
-        
+
     with open(fuzzer_output_path, "r") as f:
         fuzzer_output = f.read()
-    
+
     crash_trace = ""
-    
+
     # Check for UndefinedBehaviorSanitizer errors
     ubsan_match = re.search(r'(.*runtime error:.*)', fuzzer_output)
     if ubsan_match:
         ubsan_error = ubsan_match.group(1).strip()
         crash_trace = f"UndefinedBehaviorSanitizer Error: {ubsan_error}\n\n"
-        
+
         # Extract stack trace - look for lines starting with #
         stack_lines = re.findall(r'(#\d+.*)', fuzzer_output)
         if stack_lines:
             crash_trace += "Stack Trace:\n"
             for line in stack_lines:
                 crash_trace += f"{line}\n"
-        
+
         # Extract summary
         summary_match = re.search(r'SUMMARY: UndefinedBehaviorSanitizer: (.*)', fuzzer_output)
         if summary_match:
             crash_trace += f"\nSummary: {summary_match.group(1)}\n"
-    
+
     # If no UBSan error found, fall back to the original ERROR: pattern
     if not crash_trace:
         crash_trace = extract_crash_trace(fuzzer_output)
-    
+
     # Limit size if needed
     if len(crash_trace) > 10000:
         crash_trace = crash_trace[:10000] + "... (truncated)"
-    
+
     # Generate vulnerability signature using the same logic as the Go code
     sanitizer = pov_metadata.get("sanitizer", "")
     vuln_signature = pov_metadata.get("pov_signature", "")
@@ -1952,31 +1952,31 @@ def submit_pov_to_endpoint(log_file, project_dir, pov_metadata):
             with open(NEW_FUZZER_SRC_PATH, "r", encoding="utf-8", errors="backslashreplace") as fp:
                 submission["fuzzer_source"] = fp.read()
         except Exception as e:
-            log_message(log_file, f"Failed to read fuzzer source at {NEW_FUZZER_SRC_PATH}: {e}")   
-    
+            log_message(log_file, f"Failed to read fuzzer source at {NEW_FUZZER_SRC_PATH}: {e}")
+
     # Add crash trace if available
     if crash_trace:
         submission["crash_trace"] = crash_trace
-    
+
     # Add strategy information
     submission["strategy"] = "xs0_c_full"
     submission["strategy_version"] = "1.0"
-    
+
     try:
         # Create the request
         url = f"{submission_endpoint}/v1/task/{task_id}/pov/"
         if NEW_FUZZER_SRC_PATH:
             url = f"{submission_endpoint}/v1/task/{task_id}/freeform/pov/"
- 
+
         headers = {
             "Content-Type": "application/json",
         }
-        
+
         # Add authentication if available
         auth = None
         if api_key_id and api_token:
             auth = (api_key_id, api_token)
-        
+
         # Send the request
         response = requests.post(
             url,
@@ -1985,24 +1985,24 @@ def submit_pov_to_endpoint(log_file, project_dir, pov_metadata):
             json=submission,
             timeout=60  # 30 second timeout
         )
-        
+
         # Check response
         if response.status_code in [200, 201]:
             log_message(log_file, f"Successfully submitted POV to submission endpoint: {response.status_code}")
-            
+
             # Try to parse and log the response
             try:
                 response_data = response.json()
                 log_message(log_file, f"Response: {json.dumps(response_data, indent=2)}")
             except:
                 log_message(log_file, f"Raw response: {response.text}")
-                
+
             return True
         else:
             log_message(log_file, f"Submission endpoint returned non-OK status: {response.status_code}")
             log_message(log_file, f"Response: {response.text}")
             return False
-            
+
     except Exception as e:
         log_message(log_file, f"Error submitting POV to endpoint: {str(e)}")
         return False
@@ -2010,11 +2010,11 @@ def submit_pov_to_endpoint(log_file, project_dir, pov_metadata):
 def check_for_successful_patches(log_file, project_dir):
     """
     Check if any successful patches have been created.
-    
+
     Args:
         log_file: Log file path
         project_dir: Project directory
-        
+
     Returns:
         bool: True if successful patches found, False otherwise
     """
@@ -2028,7 +2028,7 @@ def check_for_successful_patches(log_file, project_dir):
                 return True
         except Exception as e:
             log_message(log_file, f"Error reading patch metadata: {str(e)}")
-    
+
 
     # Check for successful_patches directory with content
     if os.path.isdir(PATCH_SUCCESS_DIR):
@@ -2036,7 +2036,7 @@ def check_for_successful_patches(log_file, project_dir):
         if patches:
             log_message(log_file, f"Found successful patches: {patches}")
             return True
-    
+
     return False
 
 def extract_crash_output(output):
@@ -2047,7 +2047,7 @@ def extract_crash_output(output):
     """
     # Maximum size to return (4KB)
     MAX_SIZE = 4096
-    
+
     # Define patterns to look for, in order of priority
     patterns = [
         # AddressSanitizer errors
@@ -2074,14 +2074,14 @@ def extract_crash_output(output):
         # Generic Java exception format
         {"marker": "Exception in thread", "backtrack": False}
     ]
-    
+
     # Try each pattern
     for pattern in patterns:
         marker_index = output.find(pattern["marker"])
         if marker_index != -1:
             # Found a match
             start_idx = marker_index
-            
+
             # If backtracking is enabled, try to find the start of the error report
             if pattern["backtrack"]:
                 # Look for the nearest "==" before the marker
@@ -2092,21 +2092,21 @@ def extract_crash_output(output):
                     error_start = output[:marker_index].rfind("runtime error:")
                     if error_start != -1:
                         start_idx = error_start
-                                    
+
             # Extract up to MAX_SIZE bytes
             if len(output) - start_idx > MAX_SIZE:
                 return output[start_idx:start_idx + MAX_SIZE]
             else:
                 return output[start_idx:]
-    
+
     # If no specific error marker found, return the last 4KB of output
     if len(output) > MAX_SIZE:
         return output[-MAX_SIZE:]
-    
+
     return output
 
 def has_successful_pov(fuzzer_path):
-    
+
     fuzzer_dir = os.path.dirname(fuzzer_path)
     pattern = os.path.join(fuzzer_dir, "successful_povs*")
     matches = glob.glob(pattern)
@@ -2245,23 +2245,23 @@ def extract_control_flow_from_coverage_exec(log_file,project_src_dir,project_jar
             text=True,
             timeout=30,
         )
-        
+
         log_message(log_file, f"extract_control_flow_from_coverage_exec stdout: {result.stdout}")
         if result.stderr:
             log_message(log_file, f"Python code execution stderr: {result.stderr}")
-        
+
         return result.stdout
-    
+
     except subprocess.TimeoutExpired:
         log_message(log_file, f"Python code execution timed out")
-        
+
     except Exception as e:
         log_message(log_file, f"Error running Python code: {str(e)}")
 
     return ""
 
 SYSTEM_PROMPT="""
-You are a world-leading top software vulnerability detection expert, which helps to find vulnerabilities. 
+You are a world-leading top software vulnerability detection expert, which helps to find vulnerabilities.
 Do not aplogize when you are wrong. Just keep optimizing the result directly and proceed the progress. Do not lie or guess when you are unsure about the answer.
 If possible, show the information needed to make the response better apart from the answer given. """
 
@@ -2281,44 +2281,44 @@ def doPoV_full(log_file, initial_msg, fuzzer_path, fuzzer_name, sanitizer, proje
 
     if check_patch_success == True:
         log_message(log_file, "Will check for successful patches periodically")
-       
+
     start_time = time.time()
     end_time = start_time + (FUZZING_TIMEOUT_MINUTES * 60)
-    
+
     print(f"start_time: {start_time} end_time: {end_time} FUZZING_TIMEOUT_MINUTES: {FUZZING_TIMEOUT_MINUTES}")
-    
+
     # Track if we've found at least one successful POV
     found_pov = False
     successful_pov_metadata = {}
-    
+
     # Try with different models
     for model_name in MODELS:
         log_message(log_file, f"Attempting with model: {model_name}")
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages.append({"role": "user", "content": initial_msg})
-        
+
         # Track successful POVs for this model
         model_success_count = 0
 
         for iteration in range(1, MAX_ITERATIONS + 1):
-            
+
             log_message(log_file, f"Iteration {iteration} with {model_name}")
 
             current_time = time.time()
             if current_time > end_time:
                 log_message(log_file, f"Timeout reached after {iteration-1} iterations with {model_name}")
                 break
-            
+
             if check_patch_success:
                 if check_for_successful_patches(log_file, project_dir):
                     log_message(log_file, "Successful patch detected, stopping POV generation")
                     return True, {} # Return empty metadata since we're stopping early
             if has_successful_pov(fuzzer_path):
                 return True, {}
-            
+
             # Generate PoV
             code = generate_pov(log_file, project_dir, messages, model_name)
-            
+
             if not code:
                 log_message(log_file, "No valid Python code generated, continuing to next iteration")
                 continue
@@ -2326,7 +2326,7 @@ def doPoV_full(log_file, initial_msg, fuzzer_path, fuzzer_name, sanitizer, proje
             xbin_dir = os.path.join(project_dir, "xp0")
             log_message(log_file, f"Creating xbin_dir: {xbin_dir}")
             # Create the directory if it doesn't exist
-            os.makedirs(xbin_dir, exist_ok=True)                
+            os.makedirs(xbin_dir, exist_ok=True)
             # Run the generated code
             success, stdout, stderr = run_python_code(log_file, code, xbin_dir)
 
@@ -2337,7 +2337,7 @@ def doPoV_full(log_file, initial_msg, fuzzer_path, fuzzer_name, sanitizer, proje
                 else:
                     messages.append({"role": "user", "content":  "Python code failed to create x.bin or x1.bin, please try again."})
                 continue
-            
+
             # Run the fuzzer with the generated input
             # ------------------------------------------------------------
             # ʟᴏᴏᴘ over blob files   x.bin  x1.bin  x2.bin …
@@ -2375,13 +2375,13 @@ def doPoV_full(log_file, initial_msg, fuzzer_path, fuzzer_name, sanitizer, proje
                     # Use a timestamp to ensure unique filenames
                     timestamp = int(time.time())
                     seed_file_path = os.path.join(seed_corpus_dir, f"seed_{model_name}_{iteration}_{timestamp}.bin")
-                    
+
                     # Copy the test case to the seed corpus
                     shutil.copy(blob_path, seed_file_path)
                     log_message(log_file, f"Saved test case to seed corpus: {seed_file_path}")
                     #remove blob file if fail to trigger crash
                     all_blob_paths.add(blob_path)
-    
+
             if crash_detected:
                 log_message(log_file, f"[crash_detected] {crash_detected}.")
 
@@ -2400,7 +2400,7 @@ def doPoV_full(log_file, initial_msg, fuzzer_path, fuzzer_name, sanitizer, proje
                     log_message(log_file, f"Warning: Cannot write to {POV_SUCCESS_DIR}, using {pov_success_dir} instead")
                     os.makedirs(pov_success_dir, exist_ok=True)
                     save_dir = pov_success_dir
-                
+
                 # Save the successful test case
                 pov_file_path = os.path.join(save_dir, f"pov_{pov_id}_{model_name}_{iteration}.py")
                 try:
@@ -2410,26 +2410,26 @@ def doPoV_full(log_file, initial_msg, fuzzer_path, fuzzer_name, sanitizer, proje
                     log_message(log_file, f"Saved POV to {pov_file_path}")
                 except Exception as e:
                     log_message(log_file, f"Error saving POV: {str(e)}")
-                    
+
                 # Save the x.bin
                 blob_file = f"test_blob_{pov_id}_{model_name}_{iteration}.bin"
                 if os.path.exists(blob_path):
                     shutil.copy(blob_path, os.path.join(save_dir, blob_file))
-                
+
                 # Save the fuzzer output
                 crash_output = extract_crash_output(fuzzer_output)
                 fuzzer_output_file = f"fuzzer_output_{pov_id}_{model_name}_{iteration}.txt"
                 with open(os.path.join(save_dir, fuzzer_output_file), "w") as f:
                     f.write(crash_output)
-                
+
                 # Save the conversation history as JSON
                 conversation_file = f"conversation_{pov_id}_{model_name}_{iteration}.json"
                 with open(os.path.join(save_dir, conversation_file), "w") as f:
                     json.dump(messages, f, indent=2)
-                
+
                 log_message(log_file, f"Saved successful PoV artifacts to {save_dir}")
-                
-                vuln_signature = fuzzer_name+"-"+generate_vulnerability_signature(crash_output, sanitizer)    
+
+                vuln_signature = fuzzer_name+"-"+generate_vulnerability_signature(crash_output, sanitizer)
                 # Create POV metadata
                 pov_metadata = {
                     "conversation": conversation_file,
@@ -2446,22 +2446,22 @@ def doPoV_full(log_file, initial_msg, fuzzer_path, fuzzer_name, sanitizer, proje
                 metadata_path = os.path.join(save_dir, metadata_file)
                 with open(metadata_path, "w") as f:
                     json.dump(pov_metadata, f, indent=2)
-                
+
                 log_message(log_file, f"Saved PoV metadata to {metadata_path}")
                 log_message(log_file, f"POV SUCCESS! Vulnerability triggered with {model_name} on iteration {iteration}")
-                
+
                 # Submit POV to endpoint
                 submission_result = submit_pov_to_endpoint(log_file, project_dir, pov_metadata)
                 if submission_result or True: # for local test w/o submission endpoint
                     log_message(log_file, "Successfully submitted POV to endpoint")
                 else:
                     log_message(log_file, "Failed to submit POV to endpoint")
-                
+
                 successful_pov_metadata = pov_metadata
-                
+
                 # Continue with a new prompt to find a different POV
                 user_message = f"""
-Great job! You've successfully triggered the vulnerability. 
+Great job! You've successfully triggered the vulnerability.
 
 Now, let's try to find a different way to trigger a different vulnerability in the code.
 Can you create a different test case that might trigger the vulnerability through a different code path or with different input values?
@@ -2475,7 +2475,7 @@ Focus on:
 Please provide a new Python script that creates a different x.bin file.
 """
                 messages.append({"role": "user", "content": user_message})
-                
+
                 # If we've found 2 successful POVs with this model, move to the next model
                 # For full-scan model, there may exist multiple vulnerabilities?
                 if model_success_count >= 1:
@@ -2503,26 +2503,26 @@ The test case did not trigger the vulnerability. Please analyze the fuzzer outpu
 """
                 if iteration == MAX_ITERATIONS-1:
                     user_message = user_message + "\nThis is your last attempt. This task is very very important to me. If you generate a successful blob, I will tip you 2000 dollars."
- 
-                if USE_CONTROL_FLOW and iteration < MAX_ITERATIONS:   
+
+                if USE_CONTROL_FLOW and iteration < MAX_ITERATIONS:
                     covered_control_flow = ""
                     project_src_dir = os.path.join(project_dir, focus)
 
                     if is_c_project:
                         # 1. get coverage.profraw, coverage.profdata, coverage.lcov
-                        # -e LLVM_PROFILE_FILE=/out/coverage.profraw 
+                        # -e LLVM_PROFILE_FILE=/out/coverage.profraw
                         if not os.path.exists(blob_path):
                             blob_path = os.path.join(xbin_dir, "x1.bin") # if not exist, use x1.bin
-                        success, lcov_path, debugmsg= run_fuzzer_with_input_for_c_coverage(log_file, fuzzer_path, project_dir, project_name, focus,blob_path)    
+                        success, lcov_path, debugmsg= run_fuzzer_with_input_for_c_coverage(log_file, fuzzer_path, project_dir, project_name, focus,blob_path)
                         # 2. get covered_control_flow
                         if success == True:
-                            covered_control_flow = extract_control_flow_for_c(log_file, lcov_path, project_src_dir,project_name)                
-                    else:                                  
+                            covered_control_flow = extract_control_flow_for_c(log_file, lcov_path, project_src_dir,project_name)
+                    else:
                         fuzz_dir = os.path.dirname(fuzzer_path)
                         coverage_exec_dir = os.path.join(fuzz_dir, "xp0")
-                        project_jar =f"{project_name}.jar"                        
+                        project_jar =f"{project_name}.jar"
                         covered_control_flow = extract_control_flow_from_coverage_exec(log_file,project_src_dir,project_jar,coverage_exec_dir)
-                    
+
                     if covered_control_flow:
                         cf_lines = covered_control_flow.splitlines()
                         if len(cf_lines) > 200:
@@ -2535,7 +2535,7 @@ The test case did not trigger the vulnerability. Please analyze the fuzzer outpu
                             compressed_cf = covered_control_flow
 
                         user_message = user_message + f"\n\nThe following shows the executed code path of the fuzzer with input {blob_name}. You should generate new x.bin files to execute different code paths\n{compressed_cf}"
-  
+
                 messages.append({"role": "user", "content": user_message})
                 for blob_path_x in all_blob_paths:
                     if os.path.exists(blob_path_x):
@@ -2548,7 +2548,7 @@ The test case did not trigger the vulnerability. Please analyze the fuzzer outpu
     # Final summary
     total_time = time.time() - start_time
     log_message(log_file, f"Strategy xs0_full completed in {total_time:.2f} seconds")
-    
+
     # Check if any successful PoVs were found
     if os.path.exists(POV_SUCCESS_DIR) and len(os.listdir(POV_SUCCESS_DIR)) > 0:
         pov_count = len([f for f in os.listdir(POV_SUCCESS_DIR) if f.startswith("pov_metadata_")])
@@ -2646,7 +2646,7 @@ Notes:
 ONLY return the JSON, no explanations or comments.
 """
     print(f"construct_get_target_functions_prompt: {prompt}")
-    return prompt    
+    return prompt
 
 def construct_get_target_functions_prompt2(context_info: str, crash_log: str):
     prompt = f"""
@@ -2717,9 +2717,9 @@ def extract_json_from_response_with_4o(log_file,text):
             return matches[0].strip()
 
     return None
-    
+
 def get_target_functions(log_file, context_info: str, crash_log: str, model_name, language):
-    
+
     prompt = construct_get_target_functions_prompt0(context_info,crash_log)
 
     messages = [{"role": "system", "content": "You are a top expert in understanding code security vulnerabilities."}]
@@ -2738,14 +2738,14 @@ def get_target_functions(log_file, context_info: str, crash_log: str, model_name
         parsed = json.loads(response)
     except json.JSONDecodeError:
         # If it fails, just return an empty list or handle error
-        # use LLM to extract json and retry 
+        # use LLM to extract json and retry
         try:
             response_refined = extract_json_from_response_with_4o(log_file,response)
             parsed = json.loads(response_refined)
         except Exception as e:
             print(f"Failed to load json from response: {e}")
             return None
-    
+
     function_end_time = time.time()
     # log_message(log_file, f"Time taken LLM to get target functions: {function_end_time - function_start_time} seconds")
     # For Java, it might be hard to extract the target functions from crash log
@@ -2762,7 +2762,7 @@ def get_target_functions(log_file, context_info: str, crash_log: str, model_name
             else:
                 # Standard dot-to-slash conversion
                 file_path = file_path.replace('.', '/') + '.java'
-                
+
         allowed_extensions = ['.java', '.c', '.h', '.cc']
         is_allowed_file = any(file_path.endswith(ext) for ext in allowed_extensions)
         if not is_allowed_file:
@@ -2776,21 +2776,21 @@ def get_target_functions(log_file, context_info: str, crash_log: str, model_name
                 else:
                     #TODO if file_path contains dot like X.Y, then set to X.java
                     if '.' in file_path:
-                        class_name, method = file_path.split('.', 1) 
+                        class_name, method = file_path.split('.', 1)
                         file_path = f"{class_name}.java"
                     else:
                         file_path = "Unknown.java"
             else:
                 log_message(log_file, f"Skipping non-source file: {file_path}")
-                continue        
+                continue
         # strip OSS_FUZZ_ from function_name if exists
         # e.g., OSS_FUZZ_png_handle_iCCP -> png_handle_iCCP
         if function_name.startswith("OSS_FUZZ_"):
-            function_name = function_name[9:] 
+            function_name = function_name[9:]
         target_functions.append(f"{file_path}:{function_name}")
-    
+
     log_message(log_file, f"Extracted target functions: {target_functions}")
-    
+
     return target_functions
 
 def parse_java_code(file_path):
@@ -2800,28 +2800,28 @@ def parse_java_code(file_path):
     """
     with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
         content = f.read()
-    
+
     methods = []
-    
+
     # Pattern to match Java method declarations
     # This handles various modifiers, return types, method names, and parameters
     pattern = r'(?:public|protected|private|static|final|native|synchronized|abstract|transient)?\s*(?:<.*?>)?\s*(?:[\w\<\>\[\]]+)\s+(\w+)\s*\([^)]*\)\s*(?:throws\s+[\w\s,]+)?\s*\{'
-    
+
     for match in re.finditer(pattern, content):
         method_name = match.group(1)
         start_pos = match.start()
-        
+
         # Count opening and closing braces to find the end of the method
         brace_count = 0
         in_string = False
         in_char = False
         in_line_comment = False
         in_block_comment = False
-        
+
         for i in range(start_pos, len(content)):
             char = content[i]
             next_char = content[i+1] if i+1 < len(content) else ''
-            
+
             # Handle comments and strings
             if in_line_comment:
                 if char == '\n':
@@ -2858,7 +2858,7 @@ def parse_java_code(file_path):
             elif char == "'":
                 in_char = True
                 continue
-            
+
             # Count braces
             if char == '{':
                 brace_count += 1
@@ -2867,18 +2867,18 @@ def parse_java_code(file_path):
                 if brace_count == 0:
                     # Found the end of the method
                     method_code = content[start_pos:i+1]
-                    
+
                     # Calculate line numbers
                     start_line = content[:start_pos].count('\n') + 1
                     end_line = start_line + method_code.count('\n')
-                    
+
                     methods.append({
                         "name": method_name,
                         "start_line": start_line,
                         "end_line": end_line,
                     })
                     break
-    
+
     return methods
 
 def extract_java_method(file_path, method_name):
@@ -2889,27 +2889,27 @@ def extract_java_method(file_path, method_name):
     try:
         with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
-            
+
         # Pattern to match Java method declarations with the specific method name
         pattern = r'(?:public|protected|private|static|final|native|synchronized|abstract|transient)?\s*(?:<.*?>)?\s*(?:[\w\<\>\[\]]+)\s+' + re.escape(method_name) + r'\s*\([^)]*\)\s*(?:throws\s+[\w\s,]+)?\s*\{'
-        
+
         matches = list(re.finditer(pattern, content))
-        
+
         if matches:
             for match in matches:
                 start_pos = match.start()
-                
+
                 # Count opening and closing braces to find the end of the method
                 brace_count = 0
                 in_string = False
                 in_char = False
                 in_line_comment = False
                 in_block_comment = False
-                
+
                 for i in range(start_pos, len(content)):
                     char = content[i]
                     next_char = content[i+1] if i+1 < len(content) else ''
-                    
+
                     # Handle comments and strings
                     if in_line_comment:
                         if char == '\n':
@@ -2946,7 +2946,7 @@ def extract_java_method(file_path, method_name):
                     elif char == "'":
                         in_char = True
                         continue
-                    
+
                     # Count braces
                     if char == '{':
                         brace_count += 1
@@ -2955,17 +2955,17 @@ def extract_java_method(file_path, method_name):
                         if brace_count == 0:
                             # Found the end of the method
                             method_code = content[start_pos:i+1]
-                            
+
                             # Calculate line numbers
                             start_line = content[:start_pos].count('\n') + 1
                             end_line = start_line + method_code.count('\n')
-                            
+
                             return {
                                 "start_line": start_line,
                                 "end_line": end_line,
                                 "content": method_code
                             }
-        
+
         return None
     except Exception as e:
         print(f"Error in Java method extraction: {e}")
@@ -2981,32 +2981,32 @@ def extract_java_methods(file_path, method_name):
     try:
         with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
-            
+
         # Regex to match Java method declarations with the specific method name
         pattern = (
             r'(?:public|protected|private|static|final|native|synchronized|abstract|transient)?\s*'
             r'(?:<.*?>)?\s*'
-            r'(?:[\w\<\>\[\]]+)\s+' + re.escape(method_name) + 
+            r'(?:[\w\<\>\[\]]+)\s+' + re.escape(method_name) +
             r'\s*\([^)]*\)\s*'
             r'(?:throws\s+[\w\s,]+)?\s*\{'
         )
-        
+
         matches = list(re.finditer(pattern, content))
-        
+
         for match in matches:
             start_pos = match.start()
-            
+
             # Count opening and closing braces to find the end of this method
             brace_count = 0
             in_string = False
             in_char = False
             in_line_comment = False
             in_block_comment = False
-            
+
             for i in range(start_pos, len(content)):
                 char = content[i]
                 next_char = content[i+1] if (i+1 < len(content)) else ''
-                
+
                 # Handle comments and strings
                 if in_line_comment:
                     if char == '\n':
@@ -3043,7 +3043,7 @@ def extract_java_methods(file_path, method_name):
                 elif char == "'":
                     in_char = True
                     continue
-                
+
                 # Count braces to find the method boundary
                 if char == '{':
                     brace_count += 1
@@ -3052,11 +3052,11 @@ def extract_java_methods(file_path, method_name):
                     if brace_count == 0:
                         # Found the end of this method
                         method_code = content[start_pos:i+1]
-                        
+
                         # Calculate line numbers
                         start_line = content[:start_pos].count('\n') + 1
                         end_line = start_line + method_code.count('\n')
-                        
+
                         matched_methods.append({
                             "start_line": start_line,
                             "end_line": end_line,
@@ -3077,18 +3077,18 @@ def replace_java_method(file_path, method_name, new_method_code):
     method_info = extract_java_method(file_path, method_name)
     if not method_info:
         return None
-    
+
     with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
         lines = f.readlines()
-    
+
     start_line = method_info['start_line'] - 1
     end_line = method_info['end_line']
-    
+
     updated_lines = lines[:start_line] + [new_method_code + '\n'] + lines[end_line:]
-    
+
     with open(file_path, 'w', encoding='utf-8') as f:
         f.writelines(updated_lines)
-    
+
     return True
 
 import clang.cindex
@@ -3103,7 +3103,7 @@ def parse_c_code(file_path):
     index = clang.cindex.Index.create()
     tu = index.parse(file_path)
     functions = []
-    
+
     for node in tu.cursor.walk_preorder():
         if node.kind == clang.cindex.CursorKind.FUNCTION_DECL:
             functions.append({
@@ -3112,7 +3112,7 @@ def parse_c_code(file_path):
                 "start_line": node.extent.start.line,
                 "end_line": node.extent.end.line,
             })
-    
+
     return functions
 
 
@@ -3121,11 +3121,11 @@ def extract_function_using_fundef(file_path: str, func_name: str) -> Union[Dict[
     Extracts a function by its name from the given file using the fundef binary.
     Returns a dictionary with start_line, end_line, and content, or a list of such dictionaries
     if multiple functions with the same name are found.
-    
+
     Args:
         file_path: Path to the source file
         func_name: Name of the function to extract
-        
+
     Returns:
         Dictionary with function details, list of dictionaries if multiple matches, or None if not found
     """
@@ -3141,32 +3141,32 @@ def extract_function_using_fundef(file_path: str, func_name: str) -> Union[Dict[
 
         # Create output file path
         output_file = f"{file_dir}/{func_name}.json"
-        
+
         # Run the fundef binary
         cmd = [fundef_path, "-file", file_path, "-func", func_name, "-output", output_file]
         subprocess.run(cmd, check=True)
-        
+
         # Read the JSON file
         if os.path.exists(output_file):
             with open(output_file, 'r') as f:
                 functions = json.load(f)
-            
+
             # Clean up the file
             os.remove(output_file)
-            
+
             if not functions:
                 return None
-            
+
             # If only one function is found, return it directly
             if len(functions) == 1:
                 return functions[0]
-            
+
             # If multiple functions are found, return the list
             return functions
         else:
             print(f"Output file {output_file} not found - likely the target function was not found")
             return None
-        
+
     except subprocess.CalledProcessError as e:
         # print(f"Error running fundef: {e}")
         return None
@@ -3189,7 +3189,7 @@ def extract_function(file_path, func_name):
         # First try using Clang
         index = clang.cindex.Index.create()
         tu = index.parse(file_path)
-        
+
         for cursor in tu.cursor.walk_preorder():
             if cursor.kind == clang.cindex.CursorKind.FUNCTION_DECL and cursor.spelling == func_name:
                 if not cursor.is_definition():
@@ -3197,24 +3197,24 @@ def extract_function(file_path, func_name):
 
                 start = cursor.extent.start.line
                 end = cursor.extent.end.line
-                
+
                 with open(file_path, 'r') as f:
                     lines = f.readlines()
-                    
+
                 # Look for the actual start of the function declaration
                 # which might include return type on a line before the function name
                 actual_start = start
                 for i in range(start-2, max(0, start-5), -1):  # Check up to 5 lines before
-                    if i >= 0 and (lines[i].strip().startswith('void') or 
+                    if i >= 0 and (lines[i].strip().startswith('void') or
                                   lines[i].strip().startswith('int') or
                                   lines[i].strip().startswith('char') or
                                   lines[i].strip().startswith('static') or
                                   lines[i].strip().startswith('png_') or
-                                  any(type_keyword in lines[i].strip().split() 
+                                  any(type_keyword in lines[i].strip().split()
                                       for type_keyword in ['void', 'int', 'char', 'float', 'double', 'static'])):
                         actual_start = i + 1
                         break
-                
+
                 return {
                     "start_line": actual_start,
                     "end_line": end,
@@ -3222,37 +3222,37 @@ def extract_function(file_path, func_name):
                 }
     except Exception as e:
         print(f"Error in Clang extraction: {e}")
-    
+
     # Fallback to text-based parsing
     try:
         with open(file_path, 'r') as f:
             content = f.read()
-            
+
         # Try to find the function using regex
         # First, look for the function definition with a more precise pattern
         pattern = r'(?:void|int|char|float|double|long|unsigned|size_t|png_\w+)\s+(?:\*\s*)*' + re.escape(func_name) + r'\s*\([^)]*\)\s*(?:/\*[^*]*\*/\s*)*\{'
         matches = list(re.finditer(pattern, content))
-        
+
         if not matches:
             # Try a more relaxed pattern
             pattern = r'\b' + re.escape(func_name) + r'\s*\([^)]*\)\s*(?:/\*[^*]*\*/\s*)*\{'
             matches = list(re.finditer(pattern, content))
-        
+
         if matches:
             for match in matches:
                 start_pos = match.start()
-                
+
                 # Count opening and closing braces to find the end of the function
                 brace_count = 0
                 in_string = False
                 in_char = False
                 in_line_comment = False
                 in_block_comment = False
-                
+
                 for i in range(start_pos, len(content)):
                     char = content[i]
                     next_char = content[i+1] if i+1 < len(content) else ''
-                    
+
                     # Handle comments and strings
                     if in_line_comment:
                         if char == '\n':
@@ -3289,7 +3289,7 @@ def extract_function(file_path, func_name):
                     elif char == "'":
                         in_char = True
                         continue
-                    
+
                     # Count braces
                     if char == '{':
                         brace_count += 1
@@ -3298,17 +3298,17 @@ def extract_function(file_path, func_name):
                         if brace_count == 0:
                             # Found the end of the function
                             func_code = content[start_pos:i+1]
-                            
+
                             # Calculate line numbers
                             start_line = content[:start_pos].count('\n') + 1
                             end_line = start_line + func_code.count('\n')
-                            
+
                             return {
                                 "start_line": start_line,
                                 "end_line": end_line,
                                 "content": func_code
                             }
-        
+
         # Last resort: try to find the function with a very simple pattern
         # This might catch function declarations too, but it's a last attempt
         pattern = r'\b' + re.escape(func_name) + r'\s*\([^{]*\{[^}]*\}'
@@ -3318,13 +3318,13 @@ def extract_function(file_path, func_name):
             start_pos = match.start()
             start_line = content[:start_pos].count('\n') + 1
             end_line = start_line + func_code.count('\n')
-            
+
             return {
                 "start_line": start_line,
                 "end_line": end_line,
                 "content": func_code
             }
-            
+
         return None
     except Exception as e:
         print(f"Error in fallback extraction: {e}")
@@ -3334,26 +3334,26 @@ def extract_function(file_path, func_name):
 def calculate_function_similarity(patch_code, original_code):
     """
     Calculate similarity between patch and original function code.
-    
+
     Args:
         patch_code: The new function code (patch)
         original_code: The original function code
-        
+
     Returns:
         float: Similarity score between 0 and 1
     """
     from difflib import SequenceMatcher
-    
+
     # Extract function signature (first line or declaration)
     patch_lines = patch_code.strip().split('\n')
     original_lines = original_code.strip().split('\n')
-    
+
     patch_signature = patch_lines[0]
     original_signature = original_lines[0]
-    
+
     # Calculate signature similarity
     signature_similarity = SequenceMatcher(None, patch_signature, original_signature).ratio()
- 
+
     def extract_params(signature):
         # Extract parameters between parentheses
         params_match = re.search(r'\((.*?)\)', signature)
@@ -3363,25 +3363,25 @@ def calculate_function_similarity(patch_code, original_code):
             params = [p.strip() for p in re.split(r',\s*(?![^<>()]*[>)])', params_str)]
             return params
         return []
-    
+
     patch_params = extract_params(patch_signature)
     original_params = extract_params(original_signature)
-    
+
     # Calculate parameter count similarity
     param_count_similarity = 1.0 if len(patch_params) == len(original_params) else 0.5
-    
+
     # Calculate overall content similarity (using first few lines for efficiency)
     content_lines = min(10, min(len(patch_lines), len(original_lines)))
     content_similarity = SequenceMatcher(
-        None, 
-        '\n'.join(patch_lines[:content_lines]), 
+        None,
+        '\n'.join(patch_lines[:content_lines]),
         '\n'.join(original_lines[:content_lines])
     ).ratio()
-    
+
     # Calculate weighted similarity score
     # Signature is most important, then parameter count, then overall content
     weighted_similarity = (signature_similarity * 0.6) + (param_count_similarity * 0.3) + (content_similarity * 0.1)
-    
+
     return {
         'signature_similarity': signature_similarity,
         'param_count_similarity': param_count_similarity,
@@ -3394,30 +3394,30 @@ def replace_function(log_file, file_path, func_name, new_func_code):
     """
     Replaces the function definition with the new function code in a source file.
     Uses fundef to ensure correct function replacement.
-    
+
     Args:
         file_path: Path to the source file
         func_name: Name of the function to replace
         new_func_code: New code for the function
-        
+
     Returns:
         bool: True if replacement was successful, False otherwise
     """
     # Get function metadata using fundef
     function_info = None
-    
+
     # Extract the base function name (without variant suffix)
     base_func_name = func_name
     is_variant = False
     variant_index = 0
-    
+
     if '_' in func_name:
         parts = func_name.split('_')
         if parts[-1].isdigit():
             base_func_name = '_'.join(parts[:-1])
             variant_index = int(parts[-1])
             is_variant = True
-    
+
     # Extract all functions with this name
     metadata_list = extract_function_using_fundef(file_path, base_func_name)
     # Check if any functions were found
@@ -3428,7 +3428,7 @@ def replace_function(log_file, file_path, func_name, new_func_code):
     # Convert to list if it's not already
     if not isinstance(metadata_list, list):
         metadata_list = [metadata_list]
-    
+
     # If only one function found, use it regardless of variant name
     if len(metadata_list) == 1:
         function_info = metadata_list[0]
@@ -3443,23 +3443,23 @@ def replace_function(log_file, file_path, func_name, new_func_code):
             # Find the best matching function based on similarity
             best_index = 0
             best_score = -1
-            
+
             for i, metadata in enumerate(metadata_list):
                 original_code = metadata['content']
                 similarity = calculate_function_similarity(new_func_code, original_code)
-                
+
                 log_message(log_file,f"Function variant {i+1} similarity: {similarity['weighted_similarity']:.4f}")
                 log_message(log_file,f"  - Signature: {similarity['signature_similarity']:.4f}")
                 log_message(log_file,f"  - Parameter count: {similarity['param_count_similarity']:.4f}")
                 log_message(log_file,f"  - Content: {similarity['content_similarity']:.4f}")
-                
+
                 if similarity['weighted_similarity'] > best_score:
                     best_score = similarity['weighted_similarity']
                     best_index = i
-            
+
             function_info = metadata_list[best_index]
             log_message(log_file,f"Using best matching variant {best_index+1} with similarity score {best_score:.4f}")
-    
+
     # Read the file
     try:
         with open(file_path, 'r') as f:
@@ -3467,18 +3467,18 @@ def replace_function(log_file, file_path, func_name, new_func_code):
     except Exception as e:
         print(f"Error reading file {file_path}: {e}")
         return False
-    
+
     # Get line numbers
     start_line = function_info['start_line'] - 1  # Convert to 0-based indexing
     end_line = function_info['end_line']
-    
+
     # Ensure new_func_code ends with a newline
     if not new_func_code.endswith('\n'):
         new_func_code += '\n'
-    
+
     # Replace the function
     updated_lines = lines[:start_line] + [new_func_code] + lines[end_line:]
-    
+
     # Write the updated file
     try:
         with open(file_path, 'w') as f:
@@ -3494,7 +3494,7 @@ def try_load_function_metadata_from_analysis_service(log_file,target_functions,p
     ANALYSIS_SERVICE_URL = os.environ.get("ANALYSIS_SERVICE_URL", "http://localhost:7082")
     if not "/v1/funmeta" in ANALYSIS_SERVICE_URL:
         ANALYSIS_SERVICE_URL = f"{ANALYSIS_SERVICE_URL}/v1/funmeta"
-   
+
     payload = {
         "task_id": os.environ.get("TASK_ID"),
         "focus": focus,
@@ -3502,7 +3502,7 @@ def try_load_function_metadata_from_analysis_service(log_file,target_functions,p
         "target_functions": target_functions,
     }
     function_metadata = {}
-    
+
     try:
         print(f"ANALYSIS_SERVICE_URL: {ANALYSIS_SERVICE_URL} payload: {payload}")
 
@@ -3514,10 +3514,10 @@ def try_load_function_metadata_from_analysis_service(log_file,target_functions,p
             # Make request to analysis service
             # 5 mins at most
             response = requests.post(ANALYSIS_SERVICE_URL, json=payload, timeout=300)
-            
+
             if response.status_code == 200:
                 result = response.json()
-                
+
                 if "funmeta" in result and isinstance(result["funmeta"], dict):
                     function_metadata = result["funmeta"]
             else:
@@ -3527,25 +3527,25 @@ def try_load_function_metadata_from_analysis_service(log_file,target_functions,p
                     print("Error details (JSON):", error_details)
                 except Exception:
                     print("Response body (not JSON):", response.text)
-    
+
     except Exception as e:
         print(f"Error funmeta querying analysis service: {str(e)}")
-    
-    return function_metadata    
+
+    return function_metadata
 
 def apply_patch(log_file, patch_code_dict, project_dir, project_src_dir, language, pov_metadata):
     """
     Apply the patch to the target functions using clang.
-    
+
     Args:
         log_file: Log file path
         patch_code: Dict of {function_name: new_code} or list of (function_name, new_code) tuples
         project_dir: Project directory
-        
+
     Returns:
         tuple: (success, stdout, stderr)
     """
-    
+
     # Initialize git repository to track changes if it doesn't exist
     if not os.path.exists(os.path.join(project_src_dir, ".git")):
         log_message(log_file, "Initializing git repository to track changes...")
@@ -3554,14 +3554,14 @@ def apply_patch(log_file, patch_code_dict, project_dir, project_src_dir, languag
             subprocess.run(["git", "config", "user.email", "jeff@cse.tamu.edu"], cwd=project_src_dir, check=True, capture_output=True)
             subprocess.run(["git", "config", "user.name", "fuzzing brain"], cwd=project_src_dir, check=True, capture_output=True)
             subprocess.run(["git", "add", "."], cwd=project_src_dir, check=True, capture_output=True)
-            subprocess.run(["git", "commit", "-m", "Initial commit before applying patches"], 
+            subprocess.run(["git", "commit", "-m", "Initial commit before applying patches"],
                           cwd=project_src_dir, check=True, capture_output=True)
             log_message(log_file, "Git repository initialized successfully")
         except subprocess.CalledProcessError as e:
             log_message(log_file, f"Warning: Failed to initialize git repository: {e}")
             # Continue even if git init fails - it's not critical
 
-    log_message(log_file, "Applying patch...")    
+    log_message(log_file, "Applying patch...")
     extension = '.c' if language.startswith('c') else '.java'
 
     # Apply patches
@@ -3574,38 +3574,38 @@ def apply_patch(log_file, patch_code_dict, project_dir, project_src_dir, languag
             log_message(log_file, f"Debug project_src_dir: '{project_src_dir}'")
             log_message(log_file, f"Replacing function '{func_name}' in '{file_path}'")
             success = replace_function(log_file, file_path, func_name, new_code)
-            
+
             if success:
                 continue
             else:
                 log_message(log_file, f"Failed to replace function '{func_name}' probably function_metadata is incorrect!")
                 # return False, "", f"Failed to replace function '{func_name}'"
-        
+
         # Check for function variants (func_name_1, func_name_2, etc.)
-        func_variants = [k for k in GLOBAL_FUNCTION_METADATA.keys() 
+        func_variants = [k for k in GLOBAL_FUNCTION_METADATA.keys()
                          if k.startswith(func_name + "_")]
         # If we have variants, use the file path from any variant
         # replace_function will handle finding the best match
         if func_variants:
             log_message(log_file, f"Found {len(func_variants)} variants of function '{func_name}'")
-            
+
             # Use the file path from the first variant
             variant = func_variants[0]
             metadata = GLOBAL_FUNCTION_METADATA[variant]
             file_path = os.path.join(project_src_dir, metadata['file_path'])
-            
+
             log_message(log_file, f"Using file path from variant '{variant}': '{file_path}'")
             success = replace_function(log_file, file_path, func_name, new_code)
-            
+
             if success:
                 continue
             else:
                 log_message(log_file, f"Failed to replace function '{func_name}' for func_variants")
                 # return False, "", f"Failed to replace function '{func_name}'"
-     
+
         # If we get here, the function wasn't found in metadata, so we need to find it
         log_message(log_file, f"Function '{func_name}' not found in metadata w/ correct file_path; attempting to find it...")
-         
+
         # Try to find the file that defines this function
         found = False
         file_path_base_name = ""
@@ -3620,12 +3620,12 @@ def apply_patch(log_file, patch_code_dict, project_dir, project_src_dir, languag
                 if file.endswith(file_path_base_name) and not file.startswith("Crash_"):
                     file_path = os.path.join(root, file)
                     rel_path = os.path.relpath(file_path, project_src_dir)
-                    
+
                     # Try to extract the function from this file using fundef
                     metadata_list = extract_function_using_fundef(file_path, func_name)
                     if metadata_list:
                         log_message(log_file, f"Found function '{func_name}' in '{rel_path}'")
-                        
+
                         # Store metadata for future use
                         if isinstance(metadata_list, list):
                             for i, metadata in enumerate(metadata_list):
@@ -3635,19 +3635,19 @@ def apply_patch(log_file, patch_code_dict, project_dir, project_src_dir, languag
                         else:
                             metadata_list['file_path'] = rel_path
                             GLOBAL_FUNCTION_METADATA[func_name] = metadata_list
-     
+
                             success = replace_function(log_file,file_path, func_name, new_code)
-                            
+
                             if success:
                                 found = True
                                 break
                             else:
                                 log_message(log_file, f"Failed to replace function '{func_name}' file_path: {file_path}")
                                 # return False, "", f"Failed to replace function '{func_name}'"
-            
+
             if found:
                 break
-        
+
         if not found:
             log_message(log_file, f"Function '{func_name}' not found in any source file; skipping")
             if len(patch_code_dict) == 1:
@@ -3668,16 +3668,16 @@ def apply_patch(log_file, patch_code_dict, project_dir, project_src_dir, languag
     else:
         # Build OSS-Fuzz project fuzzers
         log_message(log_file, "Building OSS-Fuzz project fuzzers...")
-        
+
         project_name = pov_metadata["project_name"]
         sanitizer = pov_metadata["sanitizer"]
-        
+
         build_success = True
         build_output = ""
         build_error = ""
 
         log_message(log_file, f"Building with {sanitizer} sanitizer...")
-        
+
         project_sanitizer_name=f"{project_name}-{sanitizer}"
 
         # Create sanitizer-specific directories
@@ -3691,7 +3691,7 @@ def apply_patch(log_file, patch_code_dict, project_dir, project_src_dir, languag
             temp_out_dir = os.path.join(project_dir, "temp_out_" + project_sanitizer_name)
             os.makedirs(temp_out_dir, exist_ok=True)
             out_dir = temp_out_dir
-        
+
         # Create work directory
         work_dir = os.path.join(project_dir, "fuzz-tooling", "build", "work", project_sanitizer_name)
         try:
@@ -3725,7 +3725,7 @@ def apply_patch(log_file, patch_code_dict, project_dir, project_src_dir, languag
             "-v", f"{work_dir}:/work",
             f"aixcc-afc/{project_name}"
         ]
-        
+
         try:
             result = subprocess.run(
                 cmd_args,
@@ -3736,7 +3736,7 @@ def apply_patch(log_file, patch_code_dict, project_dir, project_src_dir, languag
                 text=True
             )
             # log_message(log_file, f"Build output for {sanitizer} sanitizer:\n{result.stdout}")
-            
+
             if result.returncode != 0:
                 log_message(log_file, f"Build failed for {sanitizer} sanitizer: {result.stderr}")
                 build_success = False
@@ -3746,24 +3746,24 @@ def apply_patch(log_file, patch_code_dict, project_dir, project_src_dir, languag
         except Exception as e:
             log_message(log_file, f"Error building with {sanitizer} sanitizer: {str(e)}")
             build_success = False
-            build_error += f"\n{sanitizer} build error: {str(e)}" 
+            build_error += f"\n{sanitizer} build error: {str(e)}"
 
         return build_success, build_output, build_error
 
 def generate_diff(log_file, project_src_dir, focus, function_metadata):
     """
     Generate a diff of the changes made to the target functions.
-    
+
     Args:
         log_file: Log file handle
         project_src_dir: Project source directory
         function_metadata: Metadata about the target functions
-        
+
     Returns:
         str: The diff of the changes
     """
     # log_message(log_file, "Generating diff of changes")
-    
+
     if not function_metadata:
         log_message(log_file, "No function metadata provided, generating full diff")
         result = subprocess.run(
@@ -3773,13 +3773,13 @@ def generate_diff(log_file, project_src_dir, focus, function_metadata):
             text=True
         )
         return result.stdout
-    
+
     # Get unique file paths from function metadata
     file_paths = set()
     for func_name, metadata in function_metadata.items():
         if isinstance(metadata, dict) and 'file_path' in metadata:
             file_paths.add(metadata['file_path'])
-    
+
     if not file_paths:
         log_message(log_file, "No file paths found in function metadata, generating full diff")
         result = subprocess.run(
@@ -3789,7 +3789,7 @@ def generate_diff(log_file, project_src_dir, focus, function_metadata):
             text=True
         )
         return result.stdout
-    
+
     # Generate diff for each file
     combined_diff = ""
     # Keep track of processed paths
@@ -3804,18 +3804,18 @@ def generate_diff(log_file, project_src_dir, focus, function_metadata):
                 rel_path = file_path
         else:
             rel_path = file_path
-        
+
         # Check if the path exists under project_src_dir
         full_path = os.path.join(project_src_dir, rel_path)
         if not os.path.exists(full_path):
             if rel_path.startswith(focus + '/'):
                 rel_path = rel_path[len(focus) + 1:]  # Remove 'focus/' from the beginning
-        
+
         # Skip if we've already processed this rel_path
         if rel_path in processed_paths:
             continue
         processed_paths.add(rel_path)
-                
+
         log_message(log_file, f"Generating diff file_path: {file_path}")
         log_message(log_file, f"Generating diff project_src_dir: {project_src_dir}")
         log_message(log_file, f"Generating diff rel_path: {rel_path}")
@@ -3826,13 +3826,13 @@ def generate_diff(log_file, project_src_dir, focus, function_metadata):
             capture_output=True,
             text=True
         )
-        
+
         if result.stdout:
             combined_diff += result.stdout + "\n"
-    
+
     if not combined_diff:
         log_message(log_file, "No changes detected in the specified files")
-            
+
         # Fall back to full diff if no specific changes were found
         log_message(log_file, "Falling back to full repository diff")
         result = subprocess.run(
@@ -3852,7 +3852,7 @@ def extract_function_name_from_code(code_block):
     Returns the function name if found, None otherwise.
     """
     import re
-    
+
     # Common patterns for function definitions in various languages
     patterns = [
         r'(?:static\s+)?(?:void|int|char|double|float|size_t|png_\w+)\s+(\w+)\s*\(',  # C/C++ style
@@ -3863,24 +3863,24 @@ def extract_function_name_from_code(code_block):
         r'(?:public|private|protected|static|final|native|synchronized|abstract|transient)?\s*(?:<.*>)?\s*(?:(?:\w+)(?:<.*>)?(?:\[\])?\s+)?(\w+)\s*\(',  # Java method
         r'(?:public|private|protected)?\s*(?:static)?\s*(?:final)?\s*(?:\w+)(?:<.*>)?\s+(\w+)\s*\(',  # Simplified Java method
     ]
-    
+
     for pattern in patterns:
         match = re.search(pattern, code_block)
         if match:
             return match.group(1)
-    
+
     return None
 
 def extract_json_data_from_response(log_file,response):
     """
     Extracts code from various response formats:
-    
+
     1. JSON dictionary where keys are function names and values are code blocks:
        {
          "ngx_mail_smtp_noop": "static ngx_int_t\\nngx_mail_smtp_noop(...) { ... }",
          "ngx_mail_smtp_auth_state": "static ngx_int_t\\nngx_mail_smtp_auth_state(...) { ... }"
        }
-    
+
     2. JSON with file changes:
        {
          "file": "pngrutil.c",
@@ -3889,7 +3889,7 @@ def extract_json_data_from_response(log_file,response):
            ...
          ]
        }
-    
+
     Returns a list of (function_name, code_block) or (file_name, changes_dict).
     """
     import json
@@ -3908,7 +3908,7 @@ def extract_json_data_from_response(log_file,response):
 
     # Check what format we're dealing with
     results = []
-    
+
     # Format 1: Function name -> code block mapping
     if isinstance(parsed, dict) and not any(key in parsed for key in ["file", "changes"]):
         for key, code_block in parsed.items():
@@ -3917,7 +3917,7 @@ def extract_json_data_from_response(log_file,response):
                 # More careful unescaping that preserves literal escape sequences in code
                 # First, handle double backslashes (\\) to temporarily mark them
                 # code_block = code_block.replace("\\\\", "___DOUBLE_BACKSLASH___")
-                
+
                 # # Then handle actual JSON escape sequences we want to convert
                 # code_block = (
                 #     code_block.replace("\\n", "\n")
@@ -3925,10 +3925,10 @@ def extract_json_data_from_response(log_file,response):
                 #               .replace("\\r", "\r")
                 #               .replace("\\\"", "\"")
                 # )
-                
+
                 # # Finally, restore the literal backslashes for escape sequences in the code
                 # code_block = code_block.replace("___DOUBLE_BACKSLASH___", "\\")
-                
+
                 # Check if the key is likely a filename (contains a dot)
                 if "." in key:
                     # Extract function name from the code block
@@ -3944,16 +3944,16 @@ def extract_json_data_from_response(log_file,response):
                         key = key[9:]
                     results.append((key, code_block))
             else:
-                print(f"Warning: Expected string for key {key} (supposed to be a function name), got {type(code_block)}")                
-    
+                print(f"Warning: Expected string for key {key} (supposed to be a function name), got {type(code_block)}")
+
     # Format 2: File changes format
     elif isinstance(parsed, dict) and "file" in parsed and "changes" in parsed:
         file_name = parsed.get("file", "unknown_file")
         changes = parsed.get("changes", [])
-        
+
         # Return the file name and the entire changes dictionary
         results.append((file_name, parsed))
-        
+
     # Unknown format
     else:
         print(f"Warning: Unknown JSON format: {parsed.keys() if isinstance(parsed, dict) else type(parsed)}")
@@ -3961,7 +3961,7 @@ def extract_json_data_from_response(log_file,response):
         if isinstance(parsed, dict):
             for key, value in parsed.items():
                 results.append((key, value))
-    
+
     return results
 
 def generate_patch(log_file, messages, model_name):
@@ -3974,7 +3974,7 @@ def generate_patch(log_file, messages, model_name):
         messages.append({"role": "assistant", "content": response})
     patch_end_time = time.time()
     log_message(log_file, f"Time taken to generate patch: {patch_end_time - patch_start_time} seconds")
-    
+
     log_message(log_file, f"====generate_patch response====\n{response}")
 
     if response is None:
@@ -3999,27 +3999,27 @@ def generate_patch(log_file, messages, model_name):
     if not extracted_data:
         log_message(log_file, "Failed to extract code from response")
         return None
-    
+
     patch_code_dict = {}
-    
+
     for key, value in extracted_data:
         # Handle function name -> code block format
         if isinstance(value, str):
             patch_code_dict[key] = value
             log_message(log_file, f"Extracted patch for function: {key}")
-        
+
         # Handle file changes format
         elif isinstance(value, dict) and "changes" in value:
             file_name = value.get("file", key)
             changes = value.get("changes", [])
-            
+
             # Convert changes to a patch format your system can understand
             patch_text = f"--- a/{file_name}\n+++ b/{file_name}\n"
             for change in changes:
                 line_num = change.get("line", 0)
                 old_line = change.get("old", "")
                 new_line = change.get("new", "")
-                
+
                 if old_line and not new_line:
                     # Line removal
                     patch_text += f"@@ -{line_num},1 +{line_num},0 @@\n-{old_line}\n"
@@ -4029,17 +4029,17 @@ def generate_patch(log_file, messages, model_name):
                 else:
                     # Line modification
                     patch_text += f"@@ -{line_num},1 +{line_num},1 @@\n-{old_line}\n+{new_line}\n"
-            
+
             patch_code_dict[file_name] = patch_text
             log_message(log_file, f"Extracted patch for file: {file_name} with {len(changes)} changes")
-    
+
     return patch_code_dict
 
 def reset_project_source_code(log_file,project_src_dir):
     # Reset source code to original state
     try:
         log_message(log_file, "Resetting source code to original state...")
-        
+
         # Unstage any staged changes
         subprocess.run(
             ["git", "reset", "--hard", "HEAD"],
@@ -4047,9 +4047,9 @@ def reset_project_source_code(log_file,project_src_dir):
             check=True,
             capture_output=True
         )
-        
+
         log_message(log_file, "Source code reset successful")
-    
+
     except Exception as e:
         log_message(log_file, f"Unexpected error resetting source code: {str(e)}")
 
@@ -4066,7 +4066,7 @@ Do not aplogize when you are wrong. Just keep optimizing the result directly and
 ### Relevant Functions
 {functions_metadata_str}
 
-Please return the fixed functions to patch the vulnerability. 
+Please return the fixed functions to patch the vulnerability.
 
 ## Requirements
 1. Fix ONLY the vulnerability - do not add features or refactor code
@@ -4094,11 +4094,11 @@ Return ONLY the JSON dictionary described above.
 def format_function_metadata(log_file, function_metadata, project_src_dir):
     """
     Format function metadata for the prompt, intelligently handling large files and functions.
-    
+
     Args:
         log_file: File to write logs to
         function_metadata: Dictionary mapping function names to their metadata
-        
+
     Returns:
         Formatted string containing function metadata
     """
@@ -4109,17 +4109,17 @@ def format_function_metadata(log_file, function_metadata, project_src_dir):
         if file_path not in functions_by_file:
             functions_by_file[file_path] = []
         functions_by_file[file_path].append((func_name, metadata))
-    
+
     # Format the function metadata for the prompt
     functions_metadata_str = ""
     max_total_length = 300000  # Maximum total length for all content
     max_file_length = 30000   # Maximum length for a single file
     remaining_length = max_total_length
-    
+
     # First, try to include entire files when they're not too large
     files_included = set()
     file_contents = {}
-    
+
     for file_path in functions_by_file.keys():
         try:
             # Check if the file exists and read its content
@@ -4128,7 +4128,7 @@ def format_function_metadata(log_file, function_metadata, project_src_dir):
                     file_content = f.read()
                     file_content = strip_license_text(file_content)
                     file_contents[file_path] = file_content
-                    
+
                     # If file is small enough, we'll include the whole file
                     if len(file_content) <= max_file_length and len(file_content) <= remaining_length:
                         functions_metadata_str += f"File: {file_path}\nContent:\n{file_content}\n\n"
@@ -4137,12 +4137,12 @@ def format_function_metadata(log_file, function_metadata, project_src_dir):
                         log_message(log_file, f"Including entire file: {file_path} ({len(file_content)} chars)")
         except Exception as e:
             log_message(log_file, f"Error reading file {file_path}: {str(e)}")
-    
+
     # For files that were too large to include entirely, include just the relevant functions
     for file_path, functions in functions_by_file.items():
         if file_path in files_included:
             continue  # Skip files we've already included in full
-            
+
         # Strip project_src_dir from file_path to make it more concise
         relative_file_path = file_path
         # Check if file_path contains patch_workspace and the project directory
@@ -4165,7 +4165,7 @@ def format_function_metadata(log_file, function_metadata, project_src_dir):
             relative_file_path = relative_file_path.lstrip('/')
 
         functions_metadata_str += f"File: {relative_file_path}\n\n"
-        
+
         for func_name, metadata in functions:
             # Check if we have enough space left
             if len(metadata['content']) > remaining_length:
@@ -4177,7 +4177,7 @@ def format_function_metadata(log_file, function_metadata, project_src_dir):
                         functions_metadata_str += f"Class: {metadata.get('class')}\n"
 
                     continue
-                
+
                 # Extract function signature
                 content = metadata['content']
                 signature_end = content.find('{') + 1
@@ -4185,7 +4185,7 @@ def format_function_metadata(log_file, function_metadata, project_src_dir):
                     signature = content[:signature_end]
                 else:
                     signature = content[:min(200, len(content))]
-                
+
                 truncated_content = signature + "\n    // ... [function body omitted due to length] ...\n}"
                 functions_metadata_str += f"Function: {func_name}\n{truncated_content}\n\n"
                 if len(metadata['class']) > 0:
@@ -4198,7 +4198,7 @@ def format_function_metadata(log_file, function_metadata, project_src_dir):
                     functions_metadata_str += f"Class: {metadata.get('class')}\n"
 
                 remaining_length -= len(metadata['content']) + len(func_name) + 20
-    
+
     # log_message(log_file, f"Prepared metadata for {len(function_metadata)} functions from {len(functions_by_file)} files")
     return functions_metadata_str
 
@@ -4324,36 +4324,36 @@ Write nothing except the Python script (with embedded comments)."""
 def load_task_detail(fuzz_dir):
     """
     Load TaskDetail from the task_detail.json file in the fuzzing directory.
-    
+
     Args:
         fuzz_dir (str): Path to the fuzzing directory
-        
+
     Returns:
         dict: The TaskDetail as a dictionary, or None if the file doesn't exist or can't be parsed
     """
     import os
     import json
     import logging
-    
+
     task_detail_path = os.path.join(fuzz_dir, "task_detail.json")
-    
+
     if not os.path.exists(task_detail_path):
         logging.warning(f"Task detail file not found at {task_detail_path}")
         return None
-    
+
     try:
         with open(task_detail_path, 'r') as f:
             task_detail = json.load(f)
-            
+
         # Validate required fields
         required_fields = ["task_id", "type", "metadata", "deadline", "focus", "project_name"]
         for field in required_fields:
             if field not in task_detail:
                 logging.warning(f"Required field '{field}' missing from task_detail.json")
-        
+
         logging.info(f"Successfully loaded task detail for project: {task_detail.get('project_name', 'unknown')}")
         return task_detail
-        
+
     except json.JSONDecodeError as e:
         logging.error(f"Failed to parse task_detail.json: {str(e)}")
         return None
@@ -4402,8 +4402,8 @@ def extract_reachable_functions_from_analysis_service_for_c(fuzzer_path,fuzzer_s
 
         # only sleep if we will retry again
         if attempt < max_tries:
-            time.sleep(backoff_sec)  
-    
+            time.sleep(backoff_sec)
+
     return reachable_functions
 
 
@@ -4446,7 +4446,7 @@ def extract_reachable_functions_from_analysis_service(fuzzer_path,fuzzer_src_pat
                     print("Error details (JSON):", error_details)
                 except Exception:
                     print("Response body (not JSON):", resp.text)
-                
+
                 print(f"[try {attempt}/{max_tries}] ANALYSIS_SERVICE_URL: {ANALYSIS_SERVICE_URL} payload: {payload}")
                 resp = requests.post(ANALYSIS_SERVICE_URL, json=payload, timeout=60)
                 if resp.status_code == 200:
@@ -4468,8 +4468,8 @@ def extract_reachable_functions_from_analysis_service(fuzzer_path,fuzzer_src_pat
 
         # only sleep if we will retry again
         if attempt < max_tries:
-            time.sleep(backoff_sec)  
-    
+            time.sleep(backoff_sec)
+
     return reachable_functions
 
 import json, re, time, textwrap
@@ -4571,7 +4571,7 @@ Jazzer can detect (non-exhaustive):
     if not ok:
         log_message(log_file, f"[WARN] {model_name} failed in {duration:.1f}s\n")
         return []
- 
+
     # Strip markdown fences if present
     m = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
     if m:
@@ -4637,13 +4637,13 @@ def main():
     parser.add_argument("language", help="Language")
 
     # Optional arguments to override default constants
-    parser.add_argument("--test-nginx", dest="test_nginx", type=lambda x: x.lower() == 'true', 
+    parser.add_argument("--test-nginx", dest="test_nginx", type=lambda x: x.lower() == 'true',
                     default=False, help="Whether to test Nginx (true/false)")
-    parser.add_argument("--do-patch", dest="do_patch", type=lambda x: x.lower() == 'true', 
+    parser.add_argument("--do-patch", dest="do_patch", type=lambda x: x.lower() == 'true',
                         default=False, help="Whether to apply patches (true/false)")
-    parser.add_argument("--do-patch-only", dest="do_patch_only", type=lambda x: x.lower() == 'true', 
+    parser.add_argument("--do-patch-only", dest="do_patch_only", type=lambda x: x.lower() == 'true',
                         default=False, help="Whether to only run patching (true/false)")
-    parser.add_argument("--full-scan", dest="full_scan", type=lambda x: x.lower() == 'true', 
+    parser.add_argument("--full-scan", dest="full_scan", type=lambda x: x.lower() == 'true',
                         default=False, help="Whether full scan (default is delta-scan (true/false)")
     parser.add_argument("--max-iterations", dest="max_iterations", type=int,
                         default=5, help="Maximum number of iterations")
@@ -4654,13 +4654,13 @@ def main():
     parser.add_argument("--pov-metadata-dir", dest="pov_metadata_dir", type=str,
                         default="successful_povs", help="Directory to store POV metadata")
     parser.add_argument("--patch-workspace-dir", help="Directory for patch workspace", default="patch_workspace")
-    parser.add_argument("--check-patch-success", action="store_true", 
+    parser.add_argument("--check-patch-success", action="store_true",
                         help="Check for successful patches and exit early if found")
     parser.add_argument("--model", type=str, default=CLAUDE_MODEL,
                         help="Model to use for generation")
     parser.add_argument("--cpv", type=str, default="cpv12",
                         help="CPV number to test (e.g., cpv3, cpv5, cpv9)")
-                        
+
     args = parser.parse_args()
     # Set global variables
     global TEST_NGINX, DO_PATCH, DO_PATCH_ONLY, MAX_ITERATIONS, FUZZING_TIMEOUT_MINUTES
@@ -4728,7 +4728,7 @@ def main():
         project_dir = fuzzer_path.split("/fuzz-tooling/build/out")[0] + "/"
     else:
         project_dir = os.path.dirname(os.path.dirname(fuzzer_path))
-    
+
     project_src_dir = os.path.join(project_dir, focus+"-"+sanitizer)
     print(f"DEBUG: project_dir = {project_dir}")
     print(f"DEBUG: project_src_dir = {project_src_dir}")
@@ -4751,7 +4751,7 @@ def main():
             subprocess.run(["./run.sh", "build"], cwd=project_dir, capture_output=True, text=True)
         except Exception as e:
             log_message(log_file, f"Exception building initial project: {str(e)}")
-    
+
     if DO_PATCH_ONLY:
         patch_success = False
         # move to patch_full.py
@@ -4767,8 +4767,8 @@ def main():
 
         if task_detail:
             for key, value in task_detail["metadata"].items():
-                span.set_attribute(key, value)   
-        
+                span.set_attribute(key, value)
+
         fuzzer_code, fuzzer_src_path = find_fuzzer_source(log_file, fuzzer_path, project_name, project_src_dir, language)
 
         log_message(log_file, f"Starting Strategy xs0_full for fuzzer: {fuzzer_path}")
@@ -4820,13 +4820,13 @@ def main():
                 pov_success, pov_metadata = doPoV_full(log_file,initial_msg,fuzzer_path,fuzzer_name,sanitizer,project_dir,project_name,focus,language, args.check_patch_success)
                 if pov_success or len(all_reachable_funcs) <= 10:
                     break
-            
+
         except Exception as e:
             span.record_exception(e)
 
         span.set_attribute("crs.pov.success", pov_success)
-        
-    
+
+
     return 0 if pov_success else 1
 
 if __name__ == "__main__":
