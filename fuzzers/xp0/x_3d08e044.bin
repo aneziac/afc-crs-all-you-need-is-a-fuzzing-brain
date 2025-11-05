@@ -1,0 +1,16 @@
+þ
+
+    CREATE TABLE t(x);
+    INSERT INTO t VALUES (1);
+    INSERT INTO t SELECT * FROM t;
+    INSERT INTO t SELECT * FROM t;
+    INSERT INTO t SELECT * FROM t;
+    INSERT INTO t SELECT * FROM t;
+    INSERT INTO t SELECT * FROM t;
+    SELECT 
+        row_number() OVER (ORDER BY x),
+        lag(x, 1000) OVER (ORDER BY x),
+        lead(x, 1000) OVER (ORDER BY x),
+        first_value(x) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+    FROM t;
+    

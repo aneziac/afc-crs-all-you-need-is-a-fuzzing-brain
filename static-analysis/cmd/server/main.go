@@ -144,17 +144,17 @@ func handleReachable(c *gin.Context, service *AnalysisService) {
 			if strings.Contains(request.FuzzerSourcePath, "sqlite") ||
 				strings.Contains(request.ProjectSourceDir, "sqlite") {
 
-				// For local SQLite analysis, use the direct source analysis approach
-				log.Printf("Running direct source analysis for local SQLite project")
+				// For local SQLite analysis, use ProcessCFileDebug for better analysis including sqlite3.c
+				log.Printf("Running ProcessCFileDebug for local SQLite project")
 				log.Printf("Project source dir: %s", request.ProjectSourceDir)
 				log.Printf("Fuzzer source path: %s", request.FuzzerSourcePath)
 
-				// Run direct source analysis instead of the full engine
-				directResults, err := engine.RunDirectSourceAnalysis(request.ProjectSourceDir, request.FuzzerSourcePath, request.Focus)
+				// Use ProcessCFileDebug which includes sqlite3.c analysis
+				functions, err := engine.ProcessCFileDebug(request.FuzzerSourcePath)
 				if err != nil {
-					log.Printf("Error in direct source analysis: %v", err)
+					log.Printf("Error in ProcessCFileDebug: %v", err)
 
-					// Fallback to dummy functions if direct analysis fails
+					// Fallback to dummy functions if analysis fails
 					log.Printf("Falling back to dummy functions due to analysis error")
 					c.JSON(http.StatusOK, models.ReachableResponse{
 						Status: "success",
@@ -178,7 +178,18 @@ func handleReachable(c *gin.Context, service *AnalysisService) {
 					return
 				}
 
-				taskResult = &directResults
+				// Convert functions map to slice and return directly
+				var reachableFunctions []models.FunctionDefinition
+				for _, fn := range functions {
+					reachableFunctions = append(reachableFunctions, *fn)
+				}
+
+				log.Printf("ProcessCFileDebug found %d functions - returning directly", len(reachableFunctions))
+				c.JSON(http.StatusOK, models.ReachableResponse{
+					Status:             "success",
+					ReachableFunctions: reachableFunctions,
+				})
+				return
 			} else {
 				// Return dummy response for non-SQLite cases
 				log.Printf("Non-SQLite case - returning dummy reachable functions")

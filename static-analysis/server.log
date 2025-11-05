@@ -13,10 +13,222 @@
 [GIN-debug] POST   /v1/task                  --> main.main.func6 (3 handlers)
 [GIN-debug] GET    /v1/task/:taskID          --> main.main.func7 (3 handlers)
 [GIN-debug] DELETE /v1/task/:taskID          --> main.main.func8 (3 handlers)
-2025/10/21 19:19:19 Starting analysis service on port 7082...
+2025/10/30 20:56:25 Starting analysis service on port 7082...
 [GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
 Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
 [GIN-debug] Listening and serving HTTP on :7082
-[GIN-debug] [ERROR] listen tcp :7082: bind: address already in use
-2025/10/21 19:19:19 Failed to start server: listen tcp :7082: bind: address already in use
-exit status 1
+2025/10/30 20:56:38 Received reachable functions analysis request for fuzzer: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:38 Full request details - TaskID: "", ProjectSourceDir: "/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3", Focus: "test"
+2025/10/30 20:56:38 Empty TaskID - running actual static analysis for local SQLite
+2025/10/30 20:56:38 Running ProcessCFileDebug for local SQLite project
+2025/10/30 20:56:38 Project source dir: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3
+2025/10/30 20:56:38 Fuzzer source path: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:38 sqlite3.c not found at: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/afc-sqlite3/sqlite3.c
+2025/10/30 20:56:38 Found sqlite3.c at alternative location: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/sqlite3.c
+2025/10/30 20:56:38 Starting direct source analysis for project: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test
+2025/10/30 20:56:38 *** CUSTOM DEBUG *** Found 30 source files to analyze
+2025/10/30 20:56:38 Fuzzer file found at position 11: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:38 Moved fuzzer file to front: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:38 Analyzing all 30 source files (no limit applied)
+2025/10/30 20:56:38 *** Processing ossfuzz.c file: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:38 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.ossfuzz_set_debug_flags -> ossfuzz_set_debug_flags
+2025/10/30 20:56:38 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.timeOfDay -> timeOfDay
+2025/10/30 20:56:38 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.progress_handler -> progress_handler
+2025/10/30 20:56:38 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.block_debug_pragmas -> block_debug_pragmas
+2025/10/30 20:56:38 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.exec_handler -> exec_handler
+2025/10/30 20:56:38 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.LLVMFuzzerTestOneInput -> LLVMFuzzerTestOneInput
+2025/10/30 20:56:38 Processed ossfuzz.c: found 6 functions
+2025/10/30 20:56:38 Processed atrc.c: found 3 functions
+2025/10/30 20:56:38 Processed crashtest1.c: found 2 functions
+2025/10/30 20:56:38 Processed customfuzz3.c: found 1 functions
+2025/10/30 20:56:38 Processed dbfuzz.c: found 35 functions
+2025/10/30 20:56:38 Processed dbfuzz2.c: found 15 functions
+2025/10/30 20:56:38 Processed fp-speed-1.c: found 1 functions
+2025/10/30 20:56:38 Processed fuzzcheck.c: found 60 functions
+2025/10/30 20:56:38 Processed fuzzinvariants.c: found 7 functions
+2025/10/30 20:56:38 Processed kvtest.c: found 19 functions
+2025/10/30 20:56:38 Processed optfuzz-db01.c: found 0 functions
+2025/10/30 20:56:38 Processed optfuzz.c: found 5 functions
+2025/10/30 20:56:38 Processed ossshell.c: found 1 functions
+2025/10/30 20:56:38 Processed sessionfuzz.c: found 9 functions
+2025/10/30 20:56:38 Processed shell.h: found 0 functions
+2025/10/30 20:56:38 Processed speedtest1.c: found 42 functions
+2025/10/30 20:56:38 Processed startup.c: found 5 functions
+2025/10/30 20:56:38 Processed threadtest1.c: found 9 functions
+2025/10/30 20:56:38 Processed threadtest2.c: found 4 functions
+2025/10/30 20:56:38 Processed threadtest3.c: found 53 functions
+2025/10/30 20:56:38 Processed threadtest4.c: found 12 functions
+2025/10/30 20:56:38 Processed threadtest5.c: found 9 functions
+2025/10/30 20:56:38 Processed tt3_checkpoint.c: found 5 functions
+2025/10/30 20:56:38 Processed tt3_index.c: found 2 functions
+2025/10/30 20:56:38 Processed tt3_lookaside1.c: found 3 functions
+2025/10/30 20:56:38 Processed tt3_shared.c: found 2 functions
+2025/10/30 20:56:38 Processed tt3_stress.c: found 23 functions
+2025/10/30 20:56:38 Processed tt3_vacuum.c: found 3 functions
+2025/10/30 20:56:38 Processed vt02.c: found 16 functions
+2025/10/30 20:56:38 Processed wordcount.c: found 11 functions
+2025/10/30 20:56:38 Total functions extracted: 363
+2025/10/30 20:56:38 Building improved call graph...
+2025/10/30 20:56:38 Built improved call graph with 1030 function calls and 11454 total call graph entries
+2025/10/30 20:56:38 Sample call graph entries:
+2025/10/30 20:56:38   /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/fuzzcheck.c.main -> [/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/wordcount.c.main /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/optfuzz.c.main /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/threadtest3.c.main]
+2025/10/30 20:56:38   /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/tt3_shared.c.shared_thread1 -> [external.timetostop external.opendb external.sql_script]
+2025/10/30 20:56:38   /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/fuzzcheck.c.recoverSqlCb -> [external.printf]
+2025/10/30 20:56:38   /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/wordcount.c.usage -> [/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/threadtest5.c.usage /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/startup.c.usage external.printf]
+2025/10/30 20:56:38   /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/dbfuzz2.c.LLVMFuzzerTestOneInput -> [/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.LLVMFuzzerTestOneInput /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/customfuzz3.c.LLVMFuzzerTestOneInput external.printf]
+2025/10/30 20:56:38 Looking for entry points: [LLVMFuzzerTestOneInput fuzzerTestOneInput] in fuzzer: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:38 Available functions: 363
+2025/10/30 20:56:38   Function[0]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/speedtest1.c.speedtest1_numbername -> speedtest1_numbername
+2025/10/30 20:56:38   Function[1]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/threadtest3.c.cgt_pager_1_populate -> cgt_pager_1_populate
+2025/10/30 20:56:38   Function[2]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/threadtest4.c.check_oom -> check_oom
+2025/10/30 20:56:38   Function[3]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/threadtest5.c.isPrime -> isPrime
+2025/10/30 20:56:38   Function[4]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/vt02.c.vt02Filter -> vt02Filter
+2025/10/30 20:56:38 Found entry point LLVMFuzzerTestOneInput at key: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.LLVMFuzzerTestOneInput
+2025/10/30 20:56:38 Found 36 reachable functions from LLVMFuzzerTestOneInput (key: /crs-workdir/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.LLVMFuzzerTestOneInput)
+2025/10/30 20:56:38   Reachable[0]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/kvtest.c.timeOfDay
+2025/10/30 20:56:38   Reachable[1]: external.sqlite3_progress_handler
+2025/10/30 20:56:38   Reachable[2]: external.sqlite3_db_config
+2025/10/30 20:56:38   Reachable[3]: external.sqlite3_vfs_find
+2025/10/30 20:56:38   Reachable[4]: external.sqlite3_status
+2025/10/30 20:56:38   Reachable[5]: external.shell_main
+2025/10/30 20:56:38   Reachable[6]: external.sqlite3_deserialize
+2025/10/30 20:56:38   Reachable[7]: external.memset
+2025/10/30 20:56:38   Reachable[8]: external.sqlite3_set_authorizer
+2025/10/30 20:56:38   Reachable[9]: external.sqlite3_free
+2025/10/30 20:56:38 Direct source analysis completed successfully
+2025/10/30 20:56:38 Processing sqlite3.c with regex-based extraction: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/sqlite3.c
+2025/10/30 20:56:38 Scanning 260471 lines in sqlite3.c for function definitions...
+2025/10/30 20:56:38   Found sqlite function: sqlite3_libversion_number at line 513
+2025/10/30 20:56:38   Found sqlite function: sqlite3_compileoption_used at line 538
+2025/10/30 20:56:38   Found sqlite function: sqlite3_threadsafe at line 581
+2025/10/30 20:56:38   Found sqlite function: sqlite3_close at line 678
+2025/10/30 20:56:38   Found sqlite function: sqlite3_close_v2 at line 679
+2025/10/30 20:56:38   Found sqlite function: sqlite3_exec at line 752
+2025/10/30 20:56:38   Found sqlite function: sqlite3_initialize at line 1977
+2025/10/30 20:56:38   Found sqlite function: sqlite3_shutdown at line 1978
+2025/10/30 20:56:38   Found sqlite function: sqlite3_os_init at line 1979
+2025/10/30 20:56:38   Found sqlite function: sqlite3_os_end at line 1980
+2025/10/30 20:56:38   Found sqlite function: sqlite3_config at line 2016
+2025/10/30 20:56:38   Found sqlite function: sqlite3_db_config at line 2035
+2025/10/30 20:56:38   Found sqlite function: sqlite3_extended_result_codes at line 2877
+2025/10/30 20:56:38   Found sqlite function: sqlite3_last_insert_rowid at line 2939
+2025/10/30 20:56:38   Found sqlite function: sqlite3_set_last_insert_rowid at line 2949
+2025/10/30 20:56:38   Found sqlite function: sqlite3_changes at line 3014
+2025/10/30 20:56:38   Found sqlite function: sqlite3_changes64 at line 3015
+2025/10/30 20:56:38   Found sqlite function: sqlite3_total_changes at line 3056
+2025/10/30 20:56:38   Found sqlite function: sqlite3_total_changes64 at line 3057
+2025/10/30 20:56:38   Found sqlite function: sqlite3_interrupt at line 3098
+2025/10/30 20:56:38 Extracted 2946 functions from sqlite3.c
+2025/10/30 20:56:38 Added 2946 functions from sqlite3.c using simple extraction
+2025/10/30 20:56:38 ProcessCFileDebug found 3309 functions - returning directly
+[GIN] 2025/10/30 - 20:56:38 | 200 |  716.168055ms |             ::1 | POST     "/v1/reachable"
+2025/10/30 20:56:56 Received reachable functions analysis request for fuzzer: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:56 Full request details - TaskID: "", ProjectSourceDir: "/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3", Focus: "test"
+2025/10/30 20:56:56 Empty TaskID - running actual static analysis for local SQLite
+2025/10/30 20:56:56 Running ProcessCFileDebug for local SQLite project
+2025/10/30 20:56:56 Project source dir: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3
+2025/10/30 20:56:56 Fuzzer source path: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:56 sqlite3.c not found at: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/afc-sqlite3/sqlite3.c
+2025/10/30 20:56:56 Found sqlite3.c at alternative location: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/sqlite3.c
+2025/10/30 20:56:56 Starting direct source analysis for project: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test
+2025/10/30 20:56:56 *** CUSTOM DEBUG *** Found 30 source files to analyze
+2025/10/30 20:56:56 Fuzzer file found at position 11: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:56 Moved fuzzer file to front: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:56 Analyzing all 30 source files (no limit applied)
+2025/10/30 20:56:56 *** Processing ossfuzz.c file: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:56 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.LLVMFuzzerTestOneInput -> LLVMFuzzerTestOneInput
+2025/10/30 20:56:56 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.ossfuzz_set_debug_flags -> ossfuzz_set_debug_flags
+2025/10/30 20:56:56 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.timeOfDay -> timeOfDay
+2025/10/30 20:56:56 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.progress_handler -> progress_handler
+2025/10/30 20:56:56 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.block_debug_pragmas -> block_debug_pragmas
+2025/10/30 20:56:56 *** ossfuzz.c function: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.exec_handler -> exec_handler
+2025/10/30 20:56:56 Processed ossfuzz.c: found 6 functions
+2025/10/30 20:56:56 Processed atrc.c: found 3 functions
+2025/10/30 20:56:56 Processed crashtest1.c: found 2 functions
+2025/10/30 20:56:56 Processed customfuzz3.c: found 1 functions
+2025/10/30 20:56:56 Processed dbfuzz.c: found 35 functions
+2025/10/30 20:56:56 Processed dbfuzz2.c: found 15 functions
+2025/10/30 20:56:56 Processed fp-speed-1.c: found 1 functions
+2025/10/30 20:56:56 Processed fuzzcheck.c: found 60 functions
+2025/10/30 20:56:56 Processed fuzzinvariants.c: found 7 functions
+2025/10/30 20:56:56 Processed kvtest.c: found 19 functions
+2025/10/30 20:56:56 Processed optfuzz-db01.c: found 0 functions
+2025/10/30 20:56:56 Processed optfuzz.c: found 5 functions
+2025/10/30 20:56:56 Processed ossshell.c: found 1 functions
+2025/10/30 20:56:56 Processed sessionfuzz.c: found 9 functions
+2025/10/30 20:56:56 Processed shell.h: found 0 functions
+2025/10/30 20:56:57 Processed speedtest1.c: found 42 functions
+2025/10/30 20:56:57 Processed startup.c: found 5 functions
+2025/10/30 20:56:57 Processed threadtest1.c: found 9 functions
+2025/10/30 20:56:57 Processed threadtest2.c: found 4 functions
+2025/10/30 20:56:57 Processed threadtest3.c: found 53 functions
+2025/10/30 20:56:57 Processed threadtest4.c: found 12 functions
+2025/10/30 20:56:57 Processed threadtest5.c: found 9 functions
+2025/10/30 20:56:57 Processed tt3_checkpoint.c: found 5 functions
+2025/10/30 20:56:57 Processed tt3_index.c: found 2 functions
+2025/10/30 20:56:57 Processed tt3_lookaside1.c: found 3 functions
+2025/10/30 20:56:57 Processed tt3_shared.c: found 2 functions
+2025/10/30 20:56:57 Processed tt3_stress.c: found 23 functions
+2025/10/30 20:56:57 Processed tt3_vacuum.c: found 3 functions
+2025/10/30 20:56:57 Processed vt02.c: found 16 functions
+2025/10/30 20:56:57 Processed wordcount.c: found 11 functions
+2025/10/30 20:56:57 Total functions extracted: 363
+2025/10/30 20:56:57 Building improved call graph...
+2025/10/30 20:56:57 Built improved call graph with 1030 function calls and 11454 total call graph entries
+2025/10/30 20:56:57 Sample call graph entries:
+2025/10/30 20:56:57   /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/speedtest1.c.testset_parsenumber -> [/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/speedtest1.c.speedtest1_begin_test external.sqlite3_exec /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/speedtest1.c.speedtest1_end_test]
+2025/10/30 20:56:57   /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/fuzzcheck.c.isOffset -> [external.isxdigit /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/fuzzcheck.c.hexToInt]
+2025/10/30 20:56:57   /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/tt3_stress.c.stress2_launch_thread_loop -> [external.sqlite3_malloc external.launch_thread]
+2025/10/30 20:56:57   /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/sessionfuzz.c.writeFile -> [external.fopen external.fprintf external.exit]
+2025/10/30 20:56:57   /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/dbfuzz2.c.LLVMFuzzerInitialize -> [/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/fuzzcheck.c.numberOfVChar /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/dbfuzz2.c.numberOfVChar external.strcmp]
+2025/10/30 20:56:57 Looking for entry points: [LLVMFuzzerTestOneInput fuzzerTestOneInput] in fuzzer: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+2025/10/30 20:56:57 Available functions: 363
+2025/10/30 20:56:57   Function[0]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/fuzzinvariants.c.fuzz_invariant_sql -> fuzz_invariant_sql
+2025/10/30 20:56:57   Function[1]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/tt3_stress.c.stress2_workload14 -> stress2_workload14
+2025/10/30 20:56:57   Function[2]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/dbfuzz2.c.memtraceRealloc -> memtraceRealloc
+2025/10/30 20:56:57   Function[3]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/speedtest1.c.twoCoords -> twoCoords
+2025/10/30 20:56:57   Function[4]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/speedtest1.c.randomFunc -> randomFunc
+2025/10/30 20:56:57 Found entry point LLVMFuzzerTestOneInput at key: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.LLVMFuzzerTestOneInput
+2025/10/30 20:56:57 Found 36 reachable functions from LLVMFuzzerTestOneInput (key: /crs-workdir/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c.LLVMFuzzerTestOneInput)
+2025/10/30 20:56:57   Reachable[0]: external.sqlite_exec
+2025/10/30 20:56:57   Reachable[1]: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/kvtest.c.timeOfDay
+2025/10/30 20:56:57   Reachable[2]: external.fprintf
+2025/10/30 20:56:57   Reachable[3]: external.sqlite3_status
+2025/10/30 20:56:57   Reachable[4]: external.memcpy
+2025/10/30 20:56:57   Reachable[5]: external.sqlite3_test_control
+2025/10/30 20:56:57   Reachable[6]: external.sqlite3_vfs_find
+2025/10/30 20:56:57   Reachable[7]: external.xCurrentTime
+2025/10/30 20:56:57   Reachable[8]: external.sqlite3_malloc64
+2025/10/30 20:56:57   Reachable[9]: external.exit
+2025/10/30 20:56:57 Direct source analysis completed successfully
+2025/10/30 20:56:57 Processing sqlite3.c with regex-based extraction: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/sqlite3.c
+2025/10/30 20:56:57 Scanning 260471 lines in sqlite3.c for function definitions...
+2025/10/30 20:56:57   Found sqlite function: sqlite3_libversion_number at line 513
+2025/10/30 20:56:57   Found sqlite function: sqlite3_compileoption_used at line 538
+2025/10/30 20:56:57   Found sqlite function: sqlite3_threadsafe at line 581
+2025/10/30 20:56:57   Found sqlite function: sqlite3_close at line 678
+2025/10/30 20:56:57   Found sqlite function: sqlite3_close_v2 at line 679
+2025/10/30 20:56:57   Found sqlite function: sqlite3_exec at line 752
+2025/10/30 20:56:57   Found sqlite function: sqlite3_initialize at line 1977
+2025/10/30 20:56:57   Found sqlite function: sqlite3_shutdown at line 1978
+2025/10/30 20:56:57   Found sqlite function: sqlite3_os_init at line 1979
+2025/10/30 20:56:57   Found sqlite function: sqlite3_os_end at line 1980
+2025/10/30 20:56:57   Found sqlite function: sqlite3_config at line 2016
+2025/10/30 20:56:57   Found sqlite function: sqlite3_db_config at line 2035
+2025/10/30 20:56:57   Found sqlite function: sqlite3_extended_result_codes at line 2877
+2025/10/30 20:56:57   Found sqlite function: sqlite3_last_insert_rowid at line 2939
+2025/10/30 20:56:57   Found sqlite function: sqlite3_set_last_insert_rowid at line 2949
+2025/10/30 20:56:57   Found sqlite function: sqlite3_changes at line 3014
+2025/10/30 20:56:57   Found sqlite function: sqlite3_changes64 at line 3015
+2025/10/30 20:56:57   Found sqlite function: sqlite3_total_changes at line 3056
+2025/10/30 20:56:57   Found sqlite function: sqlite3_total_changes64 at line 3057
+2025/10/30 20:56:57   Found sqlite function: sqlite3_interrupt at line 3098
+2025/10/30 20:56:57 Extracted 2946 functions from sqlite3.c
+2025/10/30 20:56:57 Added 2946 functions from sqlite3.c using simple extraction
+2025/10/30 20:56:57 ProcessCFileDebug found 3309 functions - returning directly
+[GIN] 2025/10/30 - 20:56:57 | 200 |  640.504875ms |       127.0.0.1 | POST     "/v1/reachable"
+2025/10/30 21:02:13 Received reachable functions analysis request for fuzzer: 
+2025/10/30 21:02:13 Full request details - TaskID: "", ProjectSourceDir: "", Focus: ""
+2025/10/30 21:02:13 Empty TaskID - running actual static analysis for local SQLite
+2025/10/30 21:02:13 Non-SQLite case - returning dummy reachable functions
+[GIN] 2025/10/30 - 21:02:13 | 200 |     144.256µs |             ::1 | POST     "/v1/reachable"

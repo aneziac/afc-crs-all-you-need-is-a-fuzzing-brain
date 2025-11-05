@@ -467,12 +467,6 @@ def call_llm(log_file, messages, model_name):
             logging.error(f"Error in LLM call: {str(e)}")
             return "", False
 
-if False:
-    log_file = setup_logging('test_telemetry')
-    messages = [{"role": "user", "content": TEST_QUESTION}]
-    print(call_llm(log_file, messages, OPENAI_MODEL))
-    exit(0)
-
 def extract_python_code_from_response(log_file, text, max_retries=2, timeout=30):
     """
     Args:
@@ -1749,18 +1743,6 @@ def generate_pov(log_file, project_dir, messages, model_name):
         log_message(log_file, "No Python code found in the response")
         return None
 
-def extract_java_fallback_location(output):
-    """Return 'pkg.Class.method:LINE' from a Java stack trace."""
-    for line in output.split('\n'):
-        line = line.strip()
-        # Matches: at org.foo.Bar.baz(Bar.java:42)
-        m = re.match(r'at\s+([\w\.$]+)\(([^:]+):(\d+)\)', line)
-        if m:
-            qualified_method = m.group(1)   # org.foo.Bar.baz
-            line_no          = m.group(3)   # 42
-            return f"{qualified_method}:{line_no}"
-    return ""
-
 def extract_crash_location(output, sanitizer):
     """
     Extract the crash location from the output.
@@ -1803,11 +1785,6 @@ def extract_crash_location(output, sanitizer):
                     func_info = func_info[:last_colon_idx]
 
             return func_info
-
-    if ".java" in output:
-        java_loc = extract_java_fallback_location(output)
-        if java_loc:
-            return java_loc
 
     # If we couldn't find a #0 line, look for sanitizer-specific patterns
     sanitizer = sanitizer.lower()
@@ -4806,23 +4783,6 @@ def main():
 
     log_file = setup_logging(fuzzer_name)
 
-    if TEST_NGINX == True:
-        fuzzer_path="/home/jeff/challenge-004-nginx-cp/"
-        project_dir="/home/jeff/challenge-004-nginx-cp/"
-        fuzzer_name="pov_harness"
-        # build the project
-        log_message(log_file, f"Building the initial Nginx project")
-        try:
-            subprocess.run(
-                ["git", "reset", "--hard", "HEAD"],
-                cwd=os.path.join(project_dir, focus),
-                check=True,
-                capture_output=True
-            )
-            subprocess.run(["./run.sh", "build"], cwd=project_dir, capture_output=True, text=True)
-        except Exception as e:
-            log_message(log_file, f"Exception building initial project: {str(e)}")
-
     if DO_PATCH_ONLY:
         patch_success = False
         # move to patch_full.py
@@ -4856,6 +4816,7 @@ def main():
             log_message(log_file, f"Extracted reachable functions: {all_reachable_funcs}")
             # print(f"reachable_funcs: {reachable_funcs}")
             # print(f"Received {len(all_reachable_funcs)} reachable_functions: {all_reachable_funcs}\n")
+            # quit()
 
             reachable_funcs = all_reachable_funcs
             vulnerable_functions = None
@@ -4865,7 +4826,6 @@ def main():
             MAX_ITERATIONS = 3 #set at most three iterations to optimize time
             for model_name in models_to_try:
                 if len(all_reachable_funcs) > 0:  # force execution
-                    # likely happen, try claude-3.7 first
                     top_k = len(all_reachable_funcs)
                     if top_k > 10:
                         top_k = 10

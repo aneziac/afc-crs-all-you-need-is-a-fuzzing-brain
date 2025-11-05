@@ -1,0 +1,332 @@
+Strategy: XS0
+Fuzzer: sqlite3_fuzzer
+Timestamp: 1761130673 (2025-10-22 03:57:53)
+DO_PATCH_ONLY: False
+FULL_SCAN: True
+FUZZING_TIMEOUT_MINUTES: 3
+MAX_ITERATIONS: 5
+LOG_DIR: ./tmp/strategy_logs
+POV_SUCCESS_DIR: /home/nate/code/minimal/fuzzers/successful_povs
+MODELS: claude-sonnet-4-20250514
+--------------------------------------------------------------------------------
+[2025-10-22 03:57:53] Detected local SQLite scan - using hardcoded paths
+[2025-10-22 03:57:53] Using fallback local SQLite fuzzer source: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+[2025-10-22 03:57:53] Starting Strategy xs0_full for fuzzer: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:57:53] Project directory: /home/nate/code/minimal
+[2025-10-22 03:58:00] Extracted reachable functions: [{'Name': 'timeOfDay', 'FilePath': '/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c', 'StartLine': 36, 'EndLine': 51, 'SourceCode': 'static sqlite3_int64 timeOfDay(void){\n  static sqlite3_vfs *clockVfs = 0;\n  sqlite3_int64 t;\n  if( clockVfs==0 ){\n    clockVfs = sqlite3_vfs_find(0);\n    if( clockVfs==0 ) return 0;\n  }\n  if( clockVfs->iVersion>=2 && clockVfs->xCurrentTimeInt64!=0 ){\n    clockVfs->xCurrentTimeInt64(clockVfs, &t);\n  }else{\n    double r;\n    clockVfs->xCurrentTime(clockVfs, &r);\n    t = (sqlite3_int64)(r*86400000.0);\n  }\n  return t;\n}'}, {'Name': 'progress_handler', 'FilePath': '/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c', 'StartLine': 71, 'EndLine': 79, 'SourceCode': 'static int progress_handler(void *pClientData) {\n  FuzzCtx *p = (FuzzCtx*)pClientData;\n  sqlite3_int64 iNow = timeOfDay();\n  int rc = iNow>=p->iCutoffTime;\n  sqlite3_int64 iDiff = iNow - p->iLastCb;\n  if( iDiff > p->mxInterval ) p->mxInterval = iDiff;\n  p->nCb++;\n  return rc;\n}'}]
+[2025-10-22 03:58:00] Calling claude-sonnet-4-20250514...
+[2025-10-22 03:58:03] LLM call to claude-sonnet-4-20250514: 3.33 seconds
+[2025-10-22 03:58:03] top_k: 2 [parsed] [{'name': 'progress_handler', 'score': 3, 'reason': 'Pointer dereference without null checks on pClientData cast'}, {'name': 'timeOfDay', 'score': 2, 'reason': 'Static pointer access and function pointer calls but minimal risk'}]
+
+[2025-10-22 03:58:03] Attempting with model: claude-sonnet-4-20250514
+[2025-10-22 03:58:03] Iteration 1 with claude-sonnet-4-20250514
+[2025-10-22 03:58:03] Calling claude-sonnet-4-20250514...
+[2025-10-22 03:58:23] LLM call to claude-sonnet-4-20250514: 19.24 seconds
+[2025-10-22 03:58:23] generate_pov response:
+```python
+#!/usr/bin/env python3
+"""
+SQLite Fuzzer Input Generator - Targeting progress_handler null pointer dereference
+
+The progress_handler function casts pClientData to FuzzCtx* without null checking.
+While the harness normally passes a valid pointer, if SQLite's internal state
+becomes corrupted or if there are edge cases in the progress callback registration,
+this could lead to a null pointer dereference.
+
+Additionally, we target potential issues in:
+1. Memory exhaustion scenarios that could corrupt the FuzzCtx structure
+2. SQL injection patterns that might trigger deep recursion/stack overflow
+3. Edge cases in sqlite3_exec with malformed SQL that could corrupt state
+4. Integer overflow scenarios in time calculations
+
+Strategy: Generate SQL inputs that stress the progress callback system and
+potentially corrupt memory or trigger edge cases in the progress handler.
+"""
+
+import struct
+
+def create_payload_1():
+    # Basic null byte injection attempt to potentially corrupt pClientData
+    selector = 0xfd  # Default selector
+    sql = b"SELECT randomblob(50000);" * 100  # Max out length limit multiple times
+    
+    # Format: selector_byte + \n + sql
+    payload = bytes([selector, ord('\n')]) + sql
+    return payload
+
+def create_payload_2():
+    # Attempt to trigger memory pressure and potential corruption
+    selector = 0xff  # Max execCnt value
+    
+    # Create deeply nested SQL that might exhaust stack/heap
+    nested_sql = b"SELECT (" * 1000 + b"1" + b")" * 1000 + b";"
+    
+    payload = bytes([selector, ord('\n')]) + nested_sql
+    return payload
+
+def create_payload_3():
+    # Target progress callback with recursive/long-running operations
+    selector = 0x01  # Enable foreign keys, minimal execCnt
+    
+    # SQL designed to trigger many progress callbacks with potential state corruption
+    sql = b"""
+    CREATE TABLE t1(a, b);
+    WITH RECURSIVE c(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM c WHERE x<10000)
+    INSERT INTO t1 SELECT x, randomblob(1000) FROM c;
+    SELECT * FROM t1 ORDER BY random();
+    """
+    
+    payload = bytes([selector, ord('\n')]) + sql
+    return payload
+
+def create_payload_4():
+    # Attempt to trigger integer overflow in time calculations
+    selector = 0xfe
+    
+    # SQL with operations that might cause time calculation issues
+    sql = b"""
+    PRAGMA cache_size = -2000000;
+    CREATE TABLE overflow AS SELECT randomblob(49999) as data;
+    """ + b"SELECT * FROM overflow UNION ALL " * 50 + b"SELECT 1;"
+    
+    payload = bytes([selector, ord('\n')]) + sql
+    return payload
+
+def create_payload_5():
+    # Edge case: minimal size input that bypasses early return
+    # but might cause issues in progress handler due to uninitialized state
+    selector = 0x00
+    sql = b";"  # Minimal valid SQL
+    
+    payload = bytes([selector, ord('\n')]) + sql + b"\x00" * 100  # Add null bytes
+    return payload
+
+# Generate all payloads
+payloads = [
+    create_payload_1(),
+    create_payload_2(), 
+    create_payload_3(),
+    create_payload_4(),
+    create_payload_5()
+]
+
+# Write binary files
+for i, payload in enumerate(payloads, 1):
+    with open(f'x{i}.bin', 'wb') as f:
+        f.write(payload)
+```
+[2025-10-22 03:58:23] Time for PoV generation by claude-sonnet-4-20250514: 19.25 seconds
+[2025-10-22 03:58:23] Quick-path extracted 3159 chars of code
+[2025-10-22 03:58:23] Creating xbin_dir: /home/nate/code/minimal/xp0
+[2025-10-22 03:58:23] Python code execution stdout: 
+[2025-10-22 03:58:23] x1.bin was created successfully (2502 bytes)
+[2025-10-22 03:58:23] [INFO] x.bin not found; nothing to run.
+[2025-10-22 03:58:23] [INFO] Running fuzzer with x1.bin (attempt 1)
+[2025-10-22 03:58:23] Running fuzzer /home/nate/code/minimal/fuzzers/sqlite3_fuzzer with blob /home/nate/code/minimal/xp0/x1.bin
+[2025-10-22 03:58:23] Could not determine project and sanitizer from path: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:58:23] Fuzzer did not crash, adding output to context and continuing
+[2025-10-22 03:58:23] Saved test case to seed corpus: /home/nate/code/minimal/sqlite3_fuzzer_seed_corpus/seed_claude-sonnet-4-20250514_1_1761130703.bin
+[2025-10-22 03:58:23] [INFO] Running fuzzer with x2.bin (attempt 2)
+[2025-10-22 03:58:23] Running fuzzer /home/nate/code/minimal/fuzzers/sqlite3_fuzzer with blob /home/nate/code/minimal/xp0/x2.bin
+[2025-10-22 03:58:23] Could not determine project and sanitizer from path: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:58:23] Fuzzer did not crash, adding output to context and continuing
+[2025-10-22 03:58:23] Saved test case to seed corpus: /home/nate/code/minimal/sqlite3_fuzzer_seed_corpus/seed_claude-sonnet-4-20250514_1_1761130703.bin
+[2025-10-22 03:58:23] [INFO] Running fuzzer with x3.bin (attempt 3)
+[2025-10-22 03:58:23] Running fuzzer /home/nate/code/minimal/fuzzers/sqlite3_fuzzer with blob /home/nate/code/minimal/xp0/x3.bin
+[2025-10-22 03:58:23] Could not determine project and sanitizer from path: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:58:23] Fuzzer did not crash, adding output to context and continuing
+[2025-10-22 03:58:23] Saved test case to seed corpus: /home/nate/code/minimal/sqlite3_fuzzer_seed_corpus/seed_claude-sonnet-4-20250514_1_1761130703.bin
+[2025-10-22 03:58:23] [INFO] Running fuzzer with x4.bin (attempt 4)
+[2025-10-22 03:58:23] Running fuzzer /home/nate/code/minimal/fuzzers/sqlite3_fuzzer with blob /home/nate/code/minimal/xp0/x4.bin
+[2025-10-22 03:58:23] Could not determine project and sanitizer from path: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:58:23] Fuzzer did not crash, adding output to context and continuing
+[2025-10-22 03:58:23] Saved test case to seed corpus: /home/nate/code/minimal/sqlite3_fuzzer_seed_corpus/seed_claude-sonnet-4-20250514_1_1761130703.bin
+[2025-10-22 03:58:23] [INFO] Running fuzzer with x5.bin (attempt 5)
+[2025-10-22 03:58:23] Running fuzzer /home/nate/code/minimal/fuzzers/sqlite3_fuzzer with blob /home/nate/code/minimal/xp0/x5.bin
+[2025-10-22 03:58:23] Could not determine project and sanitizer from path: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:58:23] Fuzzer did not crash, adding output to context and continuing
+[2025-10-22 03:58:23] Saved test case to seed corpus: /home/nate/code/minimal/sqlite3_fuzzer_seed_corpus/seed_claude-sonnet-4-20250514_1_1761130703.bin
+[2025-10-22 03:58:23] [coverage] fuzzer   : /home/nate/code/minimal/fuzzers/sqlite3_fuzzer-coverage
+[2025-10-22 03:58:23] [coverage] input blob: /home/nate/code/minimal/xp0/x5.bin
+[2025-10-22 03:58:23] [coverage] blob copied to /home/nate/code/minimal/fuzzers/xp0/x_d3888748.bin
+[2025-10-22 03:58:23] [coverage] docker run --rm --platform linux/amd64 -e FUZZING_ENGINE=libfuzzer -e ARCHITECTURE=x86_64 -e LLVM_PROFILE_FILE=/out/coverage.profraw -v /home/nate/code/minimal/fuzzers/xp0:/out aixcc-afc/sqlite3 /out/sqlite3_fuzzer-coverage -runs=1 /out/x_d3888748.bin
+[2025-10-22 03:58:23] 
+[2025-10-22 03:58:23] docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "/out/sqlite3_fuzzer-coverage": stat /out/sqlite3_fuzzer-coverage: no such file or directory: unknown
+
+Run 'docker run --help' for more information
+
+[2025-10-22 03:58:23] Iteration 2 with claude-sonnet-4-20250514
+[2025-10-22 03:58:23] Calling claude-sonnet-4-20250514...
+[2025-10-22 03:58:47] LLM call to claude-sonnet-4-20250514: 24.19 seconds
+[2025-10-22 03:58:47] generate_pov response:
+Looking at this more carefully, I need to analyze the harness structure and potential vulnerabilities step by step.
+
+```python
+#!/usr/bin/env python3
+"""
+SQLite Fuzzer Input Generator - Targeting UBSan/ASan vulnerabilities
+
+Analysis of the harness:
+1. Input format: [selector_byte]['\n'][sql_data] OR just [sql_data] (uses default 0xfd)
+2. Key vulnerability points:
+   - progress_handler: No null check on pClientData cast to FuzzCtx*
+   - exec_handler: Array access without bounds checking on argv
+   - timeOfDay: Function pointer dereferences without validation
+   - Integer arithmetic in progress calculations could overflow
+
+The harness has several memory safety issues:
+1. In exec_handler: argv[i] access without verifying i < argc bounds
+2. Progress handler arithmetic: iDiff = iNow - p->iLastCb could overflow
+3. Selector byte manipulation without bounds checking
+4. sqlite3_mprintf with size cast to int could truncate on large inputs
+
+Strategy: Target these specific code paths with inputs designed to trigger
+memory safety violations detectable by sanitizers.
+"""
+
+def create_payload_1():
+    # Target exec_handler argv bounds issue
+    # Use selector that maximizes execCnt, then craft SQL that returns many columns
+    selector = 0xff  # Max execCnt = 256
+    
+    # SQL that creates a result set with potential for argv buffer issues
+    sql = b"""
+    SELECT 1 as a, 2 as b, 3 as c, 4 as d, 5 as e, 6 as f, 7 as g, 8 as h,
+           9 as i, 10 as j, 11 as k, 12 as l, 13 as m, 14 as n, 15 as o, 16 as p
+    FROM (SELECT 1) 
+    CROSS JOIN (SELECT 1) t2
+    CROSS JOIN (SELECT 1) t3
+    CROSS JOIN (SELECT 1) t4;
+    """
+    
+    return bytes([selector, ord('\n')]) + sql
+
+def create_payload_2():
+    # Target integer overflow in progress_handler time calculations
+    # Don't use selector format to use default 0xfd
+    
+    # SQL designed to run for extended time and trigger many progress callbacks
+    sql = b"""
+    WITH RECURSIVE timer(x) AS (
+      SELECT 0
+      UNION ALL
+      SELECT x+1 FROM timer 
+      WHERE x < 50000
+    )
+    SELECT randomblob(49999) FROM timer;
+    """
+    
+    return sql  # No selector byte - uses default
+
+def create_payload_3():
+    # Target potential buffer overflow in sqlite3_mprintf size handling
+    # The cast to (int)size could cause truncation on 64-bit systems
+    selector = 0x80
+    
+    # Create input right at size boundaries that might cause issues
+    base_sql = b"SELECT 'A'||"
+    # Build a very long string concatenation that might stress mprintf
+    long_expr = b"'A'||" * 1000 + b"'END';"
+    
+    payload_sql = base_sql + long_expr
+    
+    return bytes([selector, ord('\n')]) + payload_sql
+
+def create_payload_4():
+    # Target potential use-after-free in cleanup with complex nested statements
+    selector = 0x01  # Minimal execCnt, enable foreign keys
+    
+    sql = b"""
+    CREATE TABLE parent(id PRIMARY KEY);
+    CREATE TABLE child(pid REFERENCES parent(id));
+    BEGIN;
+    INSERT INTO parent VALUES(1);
+    INSERT INTO child VALUES(1);
+    SAVEPOINT sp1;
+    DELETE FROM parent WHERE id=1;
+    ROLLBACK TO sp1;
+    COMMIT;
+    PRAGMA foreign_key_check;
+    """
+    
+    return bytes([selector, ord('\n')]) + sql
+
+def create_payload_5():
+    # Target boundary conditions in exec_handler with execCnt manipulation
+    # Use minimum valid input size (3 bytes) but craft it carefully
+    selector = 0x00  # execCnt = 1
+    
+    # SQL that might cause issues with single execution limit
+    sql = b"SELECT sqlite_version();PRAGMA table_info(sqlite_master);"
+    
+    # Ensure we're right at the boundary of minimum size
+    payload = bytes([selector, ord('\n')]) + sql[:1]  # Truncate to minimal
+    
+    # Pad to exactly 3 bytes total (minimum to pass size check)
+    while len(payload) < 3:
+        payload += b'\x00'
+    
+    return payload
+
+# Generate all payloads
+payloads = [
+    create_payload_1(),
+    create_payload_2(), 
+    create_payload_3(),
+    create_payload_4(),
+    create_payload_5()
+]
+
+# Write binary files
+for i, payload in enumerate(payloads, 1):
+    with open(f'x{i}.bin', 'wb') as f:
+        f.write(payload)
+    print(f"Generated x{i}.bin ({len(payload)} bytes)")
+```
+[2025-10-22 03:58:47] Time for PoV generation by claude-sonnet-4-20250514: 24.20 seconds
+[2025-10-22 03:58:47] Quick-path extracted 4038 chars of code
+[2025-10-22 03:58:47] Creating xbin_dir: /home/nate/code/minimal/xp0
+[2025-10-22 03:58:47] Python code execution stdout: Generated x1.bin (272 bytes)
+Generated x2.bin (167 bytes)
+Generated x3.bin (5020 bytes)
+Generated x4.bin (294 bytes)
+Generated x5.bin (3 bytes)
+
+[2025-10-22 03:58:47] x1.bin was created successfully (272 bytes)
+[2025-10-22 03:58:47] [INFO] x.bin not found; nothing to run.
+[2025-10-22 03:58:47] [INFO] Running fuzzer with x1.bin (attempt 1)
+[2025-10-22 03:58:47] Running fuzzer /home/nate/code/minimal/fuzzers/sqlite3_fuzzer with blob /home/nate/code/minimal/xp0/x1.bin
+[2025-10-22 03:58:47] Could not determine project and sanitizer from path: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:58:47] Fuzzer did not crash, adding output to context and continuing
+[2025-10-22 03:58:47] Saved test case to seed corpus: /home/nate/code/minimal/sqlite3_fuzzer_seed_corpus/seed_claude-sonnet-4-20250514_2_1761130727.bin
+[2025-10-22 03:58:47] [INFO] Running fuzzer with x2.bin (attempt 2)
+[2025-10-22 03:58:47] Running fuzzer /home/nate/code/minimal/fuzzers/sqlite3_fuzzer with blob /home/nate/code/minimal/xp0/x2.bin
+[2025-10-22 03:58:47] Could not determine project and sanitizer from path: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:58:47] Fuzzer did not crash, adding output to context and continuing
+[2025-10-22 03:58:47] Saved test case to seed corpus: /home/nate/code/minimal/sqlite3_fuzzer_seed_corpus/seed_claude-sonnet-4-20250514_2_1761130727.bin
+[2025-10-22 03:58:47] [INFO] Running fuzzer with x3.bin (attempt 3)
+[2025-10-22 03:58:47] Running fuzzer /home/nate/code/minimal/fuzzers/sqlite3_fuzzer with blob /home/nate/code/minimal/xp0/x3.bin
+[2025-10-22 03:58:47] Could not determine project and sanitizer from path: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:58:47] Fuzzer did not crash, adding output to context and continuing
+[2025-10-22 03:58:47] Saved test case to seed corpus: /home/nate/code/minimal/sqlite3_fuzzer_seed_corpus/seed_claude-sonnet-4-20250514_2_1761130727.bin
+[2025-10-22 03:58:47] [INFO] Running fuzzer with x4.bin (attempt 4)
+[2025-10-22 03:58:47] Running fuzzer /home/nate/code/minimal/fuzzers/sqlite3_fuzzer with blob /home/nate/code/minimal/xp0/x4.bin
+[2025-10-22 03:58:47] Could not determine project and sanitizer from path: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:58:47] Fuzzer did not crash, adding output to context and continuing
+[2025-10-22 03:58:47] Saved test case to seed corpus: /home/nate/code/minimal/sqlite3_fuzzer_seed_corpus/seed_claude-sonnet-4-20250514_2_1761130727.bin
+[2025-10-22 03:58:47] [INFO] Running fuzzer with x5.bin (attempt 5)
+[2025-10-22 03:58:47] Running fuzzer /home/nate/code/minimal/fuzzers/sqlite3_fuzzer with blob /home/nate/code/minimal/xp0/x5.bin
+[2025-10-22 03:58:47] Could not determine project and sanitizer from path: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-22 03:58:47] Fuzzer did not crash, adding output to context and continuing
+[2025-10-22 03:58:47] Saved test case to seed corpus: /home/nate/code/minimal/sqlite3_fuzzer_seed_corpus/seed_claude-sonnet-4-20250514_2_1761130727.bin
+[2025-10-22 03:58:47] [coverage] fuzzer   : /home/nate/code/minimal/fuzzers/sqlite3_fuzzer-coverage
+[2025-10-22 03:58:47] [coverage] input blob: /home/nate/code/minimal/xp0/x5.bin
+[2025-10-22 03:58:47] [coverage] blob copied to /home/nate/code/minimal/fuzzers/xp0/x_db339954.bin
+[2025-10-22 03:58:47] [coverage] docker run --rm --platform linux/amd64 -e FUZZING_ENGINE=libfuzzer -e ARCHITECTURE=x86_64 -e LLVM_PROFILE_FILE=/out/coverage.profraw -v /home/nate/code/minimal/fuzzers/xp0:/out aixcc-afc/sqlite3 /out/sqlite3_fuzzer-coverage -runs=1 /out/x_db339954.bin
+[2025-10-22 03:58:47] 
+[2025-10-22 03:58:47] docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "/out/sqlite3_fuzzer-coverage": stat /out/sqlite3_fuzzer-coverage: no such file or directory: unknown
+
+Run 'docker run --help' for more information
+
+[2025-10-22 03:58:47] Iteration 3 with claude-sonnet-4-20250514
+[2025-10-22 03:58:47] Calling claude-sonnet-4-20250514...

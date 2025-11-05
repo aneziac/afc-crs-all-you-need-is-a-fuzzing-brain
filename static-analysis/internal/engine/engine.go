@@ -892,9 +892,8 @@ func RunDirectSourceAnalysis(projectSourceDir, fuzzerSourcePath, focus string) (
 
 	log.Printf("Total functions extracted: %d", totalFunctions)
 
-	// Build a simple call graph (this is a simplified version)
-	// For a full implementation, you'd need to parse function calls within function bodies
-	buildSimpleCallGraph(&results)
+	// Build an improved call graph
+	buildImprovedCallGraph(&results)
 
 	// Find reachable functions from fuzzer entry points
 	if fuzzerSourcePath != "" {
@@ -918,7 +917,8 @@ func RunDirectSourceAnalysis(projectSourceDir, fuzzerSourcePath, focus string) (
 					entryFound = true
 					log.Printf("Found entry point %s at key: %s", entryPoint, key)
 
-					reachable := findReachableFunctions(&results, key, 3)
+					// Use improved call graph traversal with increased depth
+					reachable := findReachableFunctions(&results, key, 10) // Increased depth
 
 					// Store reachable functions using the expected format for EngineMainReachable
 					// The expected format is: normalizedFuzzerSourcePath + "." + entryPoint
@@ -930,6 +930,13 @@ func RunDirectSourceAnalysis(projectSourceDir, fuzzerSourcePath, focus string) (
 					results.ReachableFunctions[key] = reachable
 
 					log.Printf("Found %d reachable functions from %s (key: %s)", len(reachable), entryPoint, expectedKey)
+
+					// Debug: print some of the reachable functions
+					for i, funcName := range reachable {
+						if i < 10 {
+							log.Printf("  Reachable[%d]: %s", i, funcName)
+						}
+					}
 					break
 				}
 			}
@@ -945,6 +952,171 @@ func RunDirectSourceAnalysis(projectSourceDir, fuzzerSourcePath, focus string) (
 
 	log.Printf("Direct source analysis completed successfully")
 	return results, nil
+}
+
+// ProcessCFileDebug processes a single C file or a directory containing SQLite source for debugging
+func ProcessCFileDebug(filePath string) (map[string]*models.FunctionDefinition, error) {
+	// Check if the path is a file or directory
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error accessing path %s: %v", filePath, err)
+	}
+
+	var sourceDir string
+	var fuzzerFile string
+
+	if info.IsDir() {
+		sourceDir = filePath
+		fuzzerFile = ""
+	} else {
+		// It's a file, so get the directory containing it
+		sourceDir = filepath.Dir(filePath)
+		fuzzerFile = filePath
+	}
+
+	// Always include sqlite3.c if it exists in the same project
+	sqliteDir := filepath.Dir(sourceDir)
+	sqlitePath := filepath.Join(sqliteDir, "afc-sqlite3", "sqlite3.c")
+
+	// Check if sqlite3.c exists
+	if _, err := os.Stat(sqlitePath); err == nil {
+		log.Printf("Found sqlite3.c at: %s", sqlitePath)
+	} else {
+		log.Printf("sqlite3.c not found at: %s", sqlitePath)
+		// Try to find it elsewhere
+		possiblePaths := []string{
+			filepath.Join(sourceDir, "sqlite3.c"),
+			filepath.Join(sourceDir, "..", "sqlite3.c"),
+			filepath.Join(sourceDir, "..", "..", "sqlite3.c"),
+		}
+		for _, path := range possiblePaths {
+			if _, err := os.Stat(path); err == nil {
+				sqlitePath = path
+				log.Printf("Found sqlite3.c at alternative location: %s", path)
+				break
+			}
+		}
+	}
+
+	// Run direct source analysis on the entire directory
+	results, err := RunDirectSourceAnalysis(sourceDir, fuzzerFile, "")
+	if err != nil {
+		return nil, fmt.Errorf("error running direct source analysis: %v", err)
+	}
+
+	// If sqlite3.c exists, extract functions using simpler regex-based approach
+	if sqlitePath != "" {
+		if _, err := os.Stat(sqlitePath); err == nil {
+			log.Printf("Processing sqlite3.c with regex-based extraction: %s", sqlitePath)
+			sqliteFunctions, err := extractSqliteFunctionsSimple(sqlitePath)
+			if err != nil {
+				log.Printf("Warning: Failed to extract functions from sqlite3.c: %v", err)
+			} else {
+				// Add sqlite functions to results
+				for key, function := range sqliteFunctions {
+					results.Functions[key] = function
+				}
+				log.Printf("Added %d functions from sqlite3.c using simple extraction", len(sqliteFunctions))
+			}
+		}
+	}
+
+	return results.Functions, nil
+}
+
+// extractSqliteFunctionsSimple uses regex to extract function definitions from sqlite3.c
+func extractSqliteFunctionsSimple(filePath string) (map[string]*models.FunctionDefinition, error) {
+	functions := make(map[string]*models.FunctionDefinition)
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return functions, fmt.Errorf("error reading file: %v", err)
+	}
+
+	text := string(content)
+	lines := strings.Split(text, "\n")
+
+	// Regex patterns for function definitions
+	// Look for patterns like: SQLITE_API int sqlite3_open(
+	sqliteAPIPattern := regexp.MustCompile(`^SQLITE_API\s+\w+(?:\s*\*)*\s+(\w+)\s*\(`)
+	// Look for static function patterns
+	staticFuncPattern := regexp.MustCompile(`^static\s+\w+(?:\s*\*)*\s+(\w+)\s*\(`)
+	// Look for regular function patterns (return_type function_name()
+	regularFuncPattern := regexp.MustCompile(`^(?:(?:unsigned\s+)?(?:int|char|void|long|short|double|float)\s*\*?\s+)(\w+)\s*\(`)
+
+	log.Printf("Scanning %d lines in sqlite3.c for function definitions...", len(lines))
+
+	funcCount := 0
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines, comments, and preprocessor directives
+		if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		var funcName string
+		var matched bool
+
+		// Try SQLITE_API pattern first
+		if matches := sqliteAPIPattern.FindStringSubmatch(line); len(matches) > 1 {
+			funcName = matches[1]
+			matched = true
+		} else if matches := staticFuncPattern.FindStringSubmatch(line); len(matches) > 1 {
+			funcName = matches[1]
+			matched = true
+		} else if matches := regularFuncPattern.FindStringSubmatch(line); len(matches) > 1 {
+			funcName = matches[1]
+			matched = true
+		}
+
+		if matched && funcName != "" {
+			// Skip common non-function matches
+			if strings.Contains(funcName, "if") || strings.Contains(funcName, "for") ||
+				strings.Contains(funcName, "while") || strings.Contains(funcName, "switch") ||
+				len(funcName) < 3 {
+				continue
+			}
+
+			// Use current line number for start
+			startLine := i + 1
+			endLine := startLine + 10 // Conservative estimate for function length
+
+			// Look ahead a few lines to see if we can find opening brace
+			for j := 1; j <= 5 && i+j < len(lines); j++ {
+				if strings.Contains(lines[i+j], "{") {
+					endLine = startLine + 20 // Functions with implementation are longer
+					break
+				}
+			}
+
+			// Create function definition
+			key := filePath + "." + funcName
+			functions[key] = &models.FunctionDefinition{
+				Name:       funcName,
+				FilePath:   filePath,
+				StartLine:  startLine,
+				EndLine:    endLine,
+				SourceCode: line, // Just the declaration line
+			}
+
+			funcCount++
+
+			// Log some sample functions
+			if funcCount <= 10 {
+				log.Printf("  Found sqlite function: %s at lines %d-%d", funcName, startLine, endLine)
+			}
+		}
+
+		// Limit extraction to avoid memory issues
+		if funcCount >= 5000 {
+			log.Printf("Reached function limit of 5000, stopping extraction")
+			break
+		}
+	}
+
+	log.Printf("Extracted %d functions from sqlite3.c", len(functions))
+	return functions, nil
 }
 
 // buildSimpleCallGraph creates a basic call graph by analyzing function calls in source code
@@ -8934,4 +9106,145 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// buildImprovedCallGraph creates a more comprehensive call graph by analyzing function calls
+func buildImprovedCallGraph(results *models.AnalysisResults) {
+	log.Printf("Building improved call graph...")
+
+	// Create a map from function names to their fully qualified keys
+	nameToKeys := make(map[string][]string)
+	for key, function := range results.Functions {
+		nameToKeys[function.Name] = append(nameToKeys[function.Name], key)
+	}
+
+	// Regular expressions to match function calls
+	functionCallRegexes := []*regexp.Regexp{
+		regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`),    // Standard function calls: func(
+		regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`),    // Function pointers: (*func)(
+		regexp.MustCompile(`->\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`), // Method calls: obj->func(
+		regexp.MustCompile(`\.\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`), // Method calls: obj.func(
+	}
+
+	callCount := 0
+	for callerKey, callerFunction := range results.Functions {
+		lines := strings.Split(callerFunction.SourceCode, "\n")
+
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+
+			// Skip comments and preprocessor directives
+			if strings.HasPrefix(line, "//") || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "/*") {
+				continue
+			}
+
+			// Apply all regex patterns to find function calls
+			for _, regex := range functionCallRegexes {
+				matches := regex.FindAllStringSubmatch(line, -1)
+				for _, match := range matches {
+					if len(match) < 2 {
+						continue
+					}
+
+					calledFuncName := match[1]
+
+					// Skip common C keywords and operators
+					if isReservedKeyword(calledFuncName) {
+						continue
+					}
+
+					// Find all possible callee keys for this function name
+					if calleeKeys, exists := nameToKeys[calledFuncName]; exists {
+						for _, calleeKey := range calleeKeys {
+							// Avoid self-calls
+							if calleeKey != callerKey {
+								// Add to call graph
+								results.CallGraph.Calls = append(results.CallGraph.Calls, models.MethodCall{
+									Caller: callerKey,
+									Callee: calleeKey,
+								})
+
+								// Add to adjacency list
+								if results.CallGraphAdj[callerKey] == nil {
+									results.CallGraphAdj[callerKey] = []string{}
+								}
+
+								// Check for duplicates
+								duplicate := false
+								for _, existing := range results.CallGraphAdj[callerKey] {
+									if existing == calleeKey {
+										duplicate = true
+										break
+									}
+								}
+
+								if !duplicate {
+									results.CallGraphAdj[callerKey] = append(results.CallGraphAdj[callerKey], calleeKey)
+									callCount++
+								}
+							}
+						}
+					} else {
+						// This might be an external function call, but we'll track it anyway
+						externalKey := "external." + calledFuncName
+
+						results.CallGraph.Calls = append(results.CallGraph.Calls, models.MethodCall{
+							Caller: callerKey,
+							Callee: externalKey,
+						})
+
+						if results.CallGraphAdj[callerKey] == nil {
+							results.CallGraphAdj[callerKey] = []string{}
+						}
+
+						// Check for duplicates
+						duplicate := false
+						for _, existing := range results.CallGraphAdj[callerKey] {
+							if existing == externalKey {
+								duplicate = true
+								break
+							}
+						}
+
+						if !duplicate {
+							results.CallGraphAdj[callerKey] = append(results.CallGraphAdj[callerKey], externalKey)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	log.Printf("Built improved call graph with %d function calls and %d total call graph entries", callCount, len(results.CallGraph.Calls))
+
+	// Debug: Print some call graph information
+	if callCount > 0 {
+		log.Printf("Sample call graph entries:")
+		count := 0
+		for caller, callees := range results.CallGraphAdj {
+			if count >= 5 {
+				break
+			}
+			if len(callees) > 0 {
+				log.Printf("  %s -> %v", caller, callees[:min(3, len(callees))])
+				count++
+			}
+		}
+	}
+}
+
+// isReservedKeyword checks if a string is a C/C++ reserved keyword or common operator
+func isReservedKeyword(word string) bool {
+	keywords := map[string]bool{
+		"if": true, "else": true, "while": true, "for": true, "do": true,
+		"switch": true, "case": true, "default": true, "break": true, "continue": true,
+		"return": true, "goto": true, "sizeof": true, "typeof": true,
+		"int": true, "char": true, "float": true, "double": true, "void": true,
+		"const": true, "static": true, "extern": true, "auto": true, "register": true,
+		"volatile": true, "inline": true, "restrict": true,
+		"struct": true, "union": true, "enum": true, "typedef": true,
+		"signed": true, "unsigned": true, "short": true, "long": true,
+		"true": true, "false": true, "NULL": true,
+	}
+	return keywords[word]
 }

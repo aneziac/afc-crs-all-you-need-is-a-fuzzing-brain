@@ -1,0 +1,16 @@
+Strategy: XS0
+Fuzzer: sqlite3_fuzzer
+Timestamp: 1761879599 (2025-10-30 19:59:59)
+DO_PATCH_ONLY: False
+FULL_SCAN: True
+FUZZING_TIMEOUT_MINUTES: 3
+MAX_ITERATIONS: 5
+LOG_DIR: ./tmp/strategy_logs
+POV_SUCCESS_DIR: /home/nate/code/minimal/fuzzers/successful_povs
+MODELS: claude-sonnet-4-20250514
+--------------------------------------------------------------------------------
+[2025-10-30 19:59:59] Detected local SQLite scan - using hardcoded paths
+[2025-10-30 19:59:59] Using fallback local SQLite fuzzer source: /home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c
+[2025-10-30 19:59:59] Starting Strategy xs0_full for fuzzer: /home/nate/code/minimal/fuzzers/sqlite3_fuzzer
+[2025-10-30 19:59:59] Project directory: /home/nate/code/minimal
+[2025-10-30 20:00:06] Extracted reachable functions: [{'Name': 'progress_handler', 'FilePath': '/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c', 'StartLine': 71, 'EndLine': 79, 'SourceCode': 'static int progress_handler(void *pClientData) {\n  FuzzCtx *p = (FuzzCtx*)pClientData;\n  sqlite3_int64 iNow = timeOfDay();\n  int rc = iNow>=p->iCutoffTime;\n  sqlite3_int64 iDiff = iNow - p->iLastCb;\n  if( iDiff > p->mxInterval ) p->mxInterval = iDiff;\n  p->nCb++;\n  return rc;\n}'}, {'Name': 'timeOfDay', 'FilePath': '/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/test/ossfuzz.c', 'StartLine': 36, 'EndLine': 51, 'SourceCode': 'static sqlite3_int64 timeOfDay(void){\n  static sqlite3_vfs *clockVfs = 0;\n  sqlite3_int64 t;\n  if( clockVfs==0 ){\n    clockVfs = sqlite3_vfs_find(0);\n    if( clockVfs==0 ) return 0;\n  }\n  if( clockVfs->iVersion>=2 && clockVfs->xCurrentTimeInt64!=0 ){\n    clockVfs->xCurrentTimeInt64(clockVfs, &t);\n  }else{\n    double r;\n    clockVfs->xCurrentTime(clockVfs, &r);\n    t = (sqlite3_int64)(r*86400000.0);\n  }\n  return t;\n}'}]
