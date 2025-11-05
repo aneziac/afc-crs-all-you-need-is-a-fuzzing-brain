@@ -47,9 +47,9 @@ USE_CONTROL_FLOW = True
 GLOBAL_FUNCTION_METADATA = {}
 
 # Hardcoded paths for local SQLite scanning
-HARDCODED_LOCAL_SQLITE_BASE = "/home/nate/code/minimal/local-test-sqlite3-full-01"
-HARDCODED_LOCAL_SQLITE_SRC = "/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3"
-HARDCODED_LOCAL_FUZZ_TOOLING = "/home/nate/code/minimal/local-test-sqlite3-full-01/fuzz-tooling"
+HARDCODED_LOCAL_SQLITE_BASE = os.path.expanduser("~/code/minimal/local-test-sqlite3-full-01")
+HARDCODED_LOCAL_SQLITE_SRC = os.path.expanduser("~/code/minimal/local-test-sqlite3-full-01/afc-sqlite3")
+HARDCODED_LOCAL_FUZZ_TOOLING = os.path.expanduser("~/code/minimal/local-test-sqlite3-full-01/fuzz-tooling")
 
 POV_METADATA_DIR = "successful_povs"
 POV_SUCCESS_DIR = f"./tmp/{POV_METADATA_DIR}"
@@ -4742,7 +4742,7 @@ def main():
     print(f"DEBUG: Global PATCHING_TIMEOUT_MINUTES = {PATCHING_TIMEOUT_MINUTES}")
     print(f"DEBUG: Global POV_METADATA_DIR = {POV_METADATA_DIR}")
 
-    fuzzer_path = "/home/nate/code/minimal/fuzzers/sqlite3_fuzzer" # args.fuzzer_path
+    fuzzer_path = os.path.expanduser("~/code/minimal/fuzzers/sqlite3_fuzzer") # args.fuzzer_path
     project_name = "sqlite3"
     focus = "test"
     language = "c"
@@ -4777,7 +4777,7 @@ def main():
         project_dir = os.path.dirname(os.path.dirname(fuzzer_path))
 
     # project_src_dir = os.path.join(project_dir, focus+"-"+sanitizer)
-    project_src_dir = "/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3"
+    project_src_dir = os.path.expanduser("~/code/minimal/local-test-sqlite3-full-01/afc-sqlite3")
     print(f"DEBUG: project_dir = {project_dir}")
     print(f"DEBUG: project_src_dir = {project_src_dir}")
 

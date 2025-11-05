@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"static-analysis/internal/engine"
 	"static-analysis/internal/engine/models"
 	"strings"
@@ -149,8 +150,62 @@ func handleReachable(c *gin.Context, service *AnalysisService) {
 				log.Printf("Project source dir: %s", request.ProjectSourceDir)
 				log.Printf("Fuzzer source path: %s", request.FuzzerSourcePath)
 
+				// Check if fuzzer path is a binary file and try to find the source
+				var fuzzerSourcePath string
+				if info, err := os.Stat(request.FuzzerSourcePath); err == nil && !info.IsDir() {
+					// Read a small portion to check if it's binary
+					file, err := os.Open(request.FuzzerSourcePath)
+					if err == nil {
+						buffer := make([]byte, 512)
+						n, _ := file.Read(buffer)
+						file.Close()
+
+						// Check if it's a binary file (contains null bytes or ELF signature)
+						isBinary := false
+						for i := 0; i < n; i++ {
+							if buffer[i] == 0 || (i < 4 && string(buffer[0:4]) == "\x7fELF") {
+								isBinary = true
+								break
+							}
+						}
+
+						if isBinary {
+							log.Printf("Detected binary file at fuzzer path, looking for source code")
+							// Try to find a corresponding source file
+							fuzzerName := filepath.Base(request.FuzzerSourcePath)
+							possiblePaths := []string{
+								filepath.Join(request.ProjectSourceDir, "ossfuzz.c"),
+								filepath.Join(request.ProjectSourceDir, "src", "ossfuzz.c"),
+								filepath.Join(request.ProjectSourceDir, fuzzerName+".c"),
+								filepath.Join(request.ProjectSourceDir, "src", fuzzerName+".c"),
+								filepath.Join(request.ProjectSourceDir, strings.TrimSuffix(fuzzerName, "_fuzzer")+".c"),
+								request.ProjectSourceDir, // Use the directory itself
+							}
+
+							for _, path := range possiblePaths {
+								if _, err := os.Stat(path); err == nil {
+									fuzzerSourcePath = path
+									log.Printf("Found potential source at: %s", path)
+									break
+								}
+							}
+
+							if fuzzerSourcePath == "" {
+								fuzzerSourcePath = request.ProjectSourceDir
+								log.Printf("Using project directory as fallback: %s", fuzzerSourcePath)
+							}
+						} else {
+							fuzzerSourcePath = request.FuzzerSourcePath
+						}
+					} else {
+						fuzzerSourcePath = request.FuzzerSourcePath
+					}
+				} else {
+					fuzzerSourcePath = request.FuzzerSourcePath
+				}
+
 				// Use ProcessCFileDebug which includes sqlite3.c analysis
-				functions, err := engine.ProcessCFileDebug(request.FuzzerSourcePath)
+				functions, err := engine.ProcessCFileDebug(fuzzerSourcePath)
 				if err != nil {
 					log.Printf("Error in ProcessCFileDebug: %v", err)
 
@@ -161,14 +216,14 @@ func handleReachable(c *gin.Context, service *AnalysisService) {
 						ReachableFunctions: []models.FunctionDefinition{
 							{
 								Name:       "sqlite3_exec",
-								FilePath:   "/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/src/main.c",
+								FilePath:   filepath.Join(request.ProjectSourceDir, "src", "main.c"),
 								StartLine:  100,
 								EndLine:    150,
 								SourceCode: "int sqlite3_exec(/* dummy function */)",
 							},
 							{
 								Name:       "sqlite3_prepare",
-								FilePath:   "/home/nate/code/minimal/local-test-sqlite3-full-01/afc-sqlite3/src/prepare.c",
+								FilePath:   filepath.Join(request.ProjectSourceDir, "src", "prepare.c"),
 								StartLine:  200,
 								EndLine:    250,
 								SourceCode: "int sqlite3_prepare(/* dummy function */)",
@@ -178,13 +233,62 @@ func handleReachable(c *gin.Context, service *AnalysisService) {
 					return
 				}
 
-				// Convert functions map to slice and return directly
-				var reachableFunctions []models.FunctionDefinition
+				// Convert functions map to slice and limit to avoid token limits
+				var allFunctions []models.FunctionDefinition
 				for _, fn := range functions {
-					reachableFunctions = append(reachableFunctions, *fn)
+					allFunctions = append(allFunctions, *fn)
 				}
 
-				log.Printf("ProcessCFileDebug found %d functions - returning directly", len(reachableFunctions))
+				// Limit functions to avoid exceeding Claude's token limit
+				const maxFunctions = 50
+				var reachableFunctions []models.FunctionDefinition
+
+				if len(allFunctions) <= maxFunctions {
+					reachableFunctions = allFunctions
+				} else {
+					// Prioritize functions by relevance
+					prioritized := make([]models.FunctionDefinition, 0, len(allFunctions))
+					regular := make([]models.FunctionDefinition, 0, len(allFunctions))
+
+					for _, fn := range allFunctions {
+						name := strings.ToLower(fn.Name)
+						// Prioritize fuzzer entry points and common vulnerability-prone functions
+						if strings.Contains(name, "fuzzertestoneInput") ||
+							strings.Contains(name, "llvmfuzzertestoneInput") ||
+							strings.Contains(name, "parse") ||
+							strings.Contains(name, "read") ||
+							strings.Contains(name, "write") ||
+							strings.Contains(name, "copy") ||
+							strings.Contains(name, "buffer") ||
+							strings.Contains(name, "alloc") ||
+							strings.Contains(name, "free") ||
+							strings.Contains(name, "exec") ||
+							strings.Contains(name, "sql") ||
+							strings.Contains(name, "sqlite3_") && !strings.HasPrefix(name, "sqlite3Fts5") {
+							prioritized = append(prioritized, fn)
+						} else {
+							regular = append(regular, fn)
+						}
+					}
+
+					// Take prioritized functions first, then fill with regular ones
+					reachableFunctions = append(reachableFunctions, prioritized...)
+					remaining := maxFunctions - len(prioritized)
+					if remaining > 0 && len(regular) > 0 {
+						if remaining >= len(regular) {
+							reachableFunctions = append(reachableFunctions, regular...)
+						} else {
+							reachableFunctions = append(reachableFunctions, regular[:remaining]...)
+						}
+					}
+
+					// Truncate if still too many
+					if len(reachableFunctions) > maxFunctions {
+						reachableFunctions = reachableFunctions[:maxFunctions]
+					}
+				}
+
+				log.Printf("ProcessCFileDebug found %d functions - returning %d most relevant", len(allFunctions), len(reachableFunctions))
 				c.JSON(http.StatusOK, models.ReachableResponse{
 					Status:             "success",
 					ReachableFunctions: reachableFunctions,
